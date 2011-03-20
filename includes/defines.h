@@ -9,7 +9,7 @@
 
 #define SAVE_VERSION 46
 #define MINOR_VERSION 4
-#define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
+#define IDENT_VERSION "D" //Change this if you're not Simon! It should be a single letter.
 //#define BETA
 
 #define SERVER "powdertoy.co.uk"
@@ -68,7 +68,9 @@ extern unsigned char ZSIZE;
 #define BRUSH_NUM 2
 
 #define PYCONSOLE
-//#define PYEXT //enable this on 64bit to prevent segfault
+//#define PYEXT
+//WARNING pyext must be defined on 64bit!
+//also, don't add a comment on that line, it breaks.
 
 #ifdef PIX16
 typedef unsigned short pixel;
@@ -159,6 +161,8 @@ int player2spawn;
 int death2;
 int ISSPAWN1;
 int ISSPAWN2;
+extern char pyready;
+extern char pygood;
 extern sign signs[MAXSIGNS];
 extern stamp stamps[STAMP_MAX];
 extern int stamp_count;

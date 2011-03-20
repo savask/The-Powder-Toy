@@ -28,9 +28,10 @@
 
 #ifdef PYCONSOLE
 #include "Python.h"
-#ifndef PYEXT
 #include "pyconsole.h"
-#endif
+//#include "pystdlib.h"
+char pyready=1;
+char pygood=1;
 #endif
 
 #include <stdio.h>
@@ -1620,7 +1621,7 @@ emb_set_ctype(PyObject *self, PyObject *args, PyObject *keywds)
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
     char *type = "";
-    char *kwlist[] = {"setto", "toctypeint", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "settoint", "from", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "s|IsIII:set_type",kwlist ,&type, &life, &name,&i,&x,&y))
         return NULL;
     //
@@ -1917,6 +1918,63 @@ emb_get_modifier(PyObject *self, PyObject *args)
      return Py_BuildValue("(iiiiii)",sdl_mod&KMOD_LCTRL,sdl_mod&KMOD_RCTRL,sdl_mod&KMOD_LALT,sdl_mod&KMOD_RALT,sdl_mod&KMOD_LSHIFT,sdl_mod&KMOD_RSHIFT);
 }
 
+//SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
+static PyObject*
+emb_set_keyrepeat(PyObject *self, PyObject *args)
+{
+    ////SDL_EnableKeyRepeat(delay,interval)
+    int keydelay,keyinterval;
+    keydelay=SDL_DEFAULT_REPEAT_DELAY;
+    keyinterval=SDL_DEFAULT_REPEAT_INTERVAL;
+    if(!PyArg_ParseTuple(args, "|ii:set_keyrepeat",&keydelay,&keyinterval))
+        return NULL;
+    return Py_BuildValue("i",SDL_EnableKeyRepeat(keydelay,keyinterval));
+}
+
+//delete_part
+static PyObject*
+emb_delete(PyObject *self, PyObject *args)
+{
+    ////SDL_EnableKeyRepeat(delay,interval)
+    int x,y;
+    if(!PyArg_ParseTuple(args, "ii:delete",&x,&y))
+        return NULL;
+    delete_part(x,y);
+    return Py_BuildValue("i",1);
+}
+
+static PyObject*
+emb_set_pressure(PyObject *self, PyObject *args)
+{
+    ////SDL_EnableKeyRepeat(delay,interval)
+    int x,y,press;
+    if(!PyArg_ParseTuple(args, "iii:set_pressure",&x,&y,&press))
+        return NULL;
+    pv[y/CELL][x/CELL]=press;
+    return Py_BuildValue("i",1);
+}
+
+static PyObject*
+emb_set_velocity(PyObject *self, PyObject *args)
+{
+    ////SDL_EnableKeyRepeat(delay,interval)
+    int x,y,xv,yv;
+    if(!PyArg_ParseTuple(args, "iiii:set_velocity",&x,&y,&xv,&yv))
+        return NULL;
+    vx[y/CELL][x/CELL]=xv;
+    vy[y/CELL][x/CELL]=yv;
+    return Py_BuildValue("i",1);
+}
+
+static PyObject*
+emb_disable_python(PyObject *self, PyObject *args)
+{
+    if(!PyArg_ParseTuple(args, ":disable_python"))
+        return NULL;
+    pyready=0;
+    return Py_BuildValue("i",1);
+}
+
 static PyMethodDef EmbMethods[] = { //WARNING! don't forget to register your function here!
     {"create",		    (PyCFunction)emb_create, 		METH_VARARGS|METH_KEYWORDS,	"create a particle."},
     {"log", 		    (PyCFunction)emb_log, 		METH_VARARGS,			"logs an error string to the console."},
@@ -1929,7 +1987,7 @@ static PyMethodDef EmbMethods[] = { //WARNING! don't forget to register your fun
     {"set_tmp", 	    (PyCFunction)emb_set_tmp, 		METH_VARARGS|METH_KEYWORDS,	"sets tmp of a specified particle."},
     {"set_x", 		    (PyCFunction)emb_set_x, 		METH_VARARGS|METH_KEYWORDS,	"sets x of a specified particle."},
     {"set_y", 		    (PyCFunction)emb_set_y, 		METH_VARARGS|METH_KEYWORDS,	"sets y of a specified particle."},
-    {"set_ctype",   	(PyCFunction)emb_set_y, 		METH_VARARGS|METH_KEYWORDS,	"sets ctype of a specified particle."},
+    {"set_ctype",   	(PyCFunction)emb_set_ctype, 		METH_VARARGS|METH_KEYWORDS,	"sets ctype of a specified particle."},
     {"set_vx", 		    (PyCFunction)emb_set_vx, 		METH_VARARGS|METH_KEYWORDS,	"sets vx of a specified particle."},
     {"set_vy", 		    (PyCFunction)emb_set_vy, 		METH_VARARGS|METH_KEYWORDS,	"sets vy of a specified particle."},
     {"pause", 		    (PyCFunction)emb_pause, 		METH_VARARGS,			"pause the game."},
@@ -1952,6 +2010,11 @@ static PyMethodDef EmbMethods[] = { //WARNING! don't forget to register your fun
     {"shortcuts_disable",    (PyCFunction)emb_shortcuts_disable,       METH_VARARGS,           "disable keyboard shortcuts"},
     {"shortcuts_enable",     (PyCFunction)emb_shortcuts_enable,       METH_VARARGS,           "enable keyboard shortcuts"},
     {"get_modifier",         (PyCFunction)emb_get_modifier,       METH_VARARGS,           "get pressed modifier keys"},
+    {"set_keyrepeat",        (PyCFunction)emb_set_keyrepeat,       METH_VARARGS,           "set key repeat rate."},
+    {"delete",        (PyCFunction)emb_delete,       METH_VARARGS,           "delete a particle"},
+    {"set_pressure",        (PyCFunction)emb_set_pressure,       METH_VARARGS,           "set pressure"},
+    {"set_velocity",        (PyCFunction)emb_set_velocity,       METH_VARARGS,           "set velocity"},
+    {"disable_python",        (PyCFunction)emb_disable_python,       METH_VARARGS,           "switch back to the old console."},
     {NULL, NULL, 0, NULL}
 };
 #endif
@@ -2002,14 +2065,24 @@ int main(int argc, char *argv[])
 	fmt.userdata = NULL;
 	
     #ifdef PYCONSOLE
+    //dump tpt_console_stdlib to file here
+    /*#include "pystdlib.h"
+    FILE* fid;
+    fid=fopen("stdlib.zip","w");
+    //fputs(tpt_console_stdlib,fid);
+    fwrite(&tpt_console_stdlib,1,tpt_console_stdlibsize,fid);
+    fclose(fid);*/
+    //crashes gcc
+    
     //initialise python console
     Py_Initialize();
+    PyRun_SimpleString("print 'python present.'");
     Py_InitModule("tpt", EmbMethods);
     //change the path to find all the correct modules
-    PyRun_SimpleString("import sys\nsys.path.append('.')");
-    PyRun_SimpleString("print 'python present.'");
+    PyRun_SimpleString("import sys\nsys.path.append('./tptPython.zip')\nsys.path.append('.')");
     //load the console module and whatnot
     #ifdef PYEXT
+    PyRun_SimpleString(tpt_console_py);
     printf("using external python console file.\n");
     pname=PyString_FromString("tpt_console");//create string object
     pmodule = PyImport_Import(pname);//import module
@@ -2029,7 +2102,9 @@ int main(int argc, char *argv[])
         {
             PyErr_Print();
             printf("unable to find handle function, mangled console.py?\n");
-            return -1;
+            //return -1;
+            pyready=0;
+            pygood=0;
         }
         
         pstep=PyObject_GetAttrString(pmodule,"step");//get the handler function
@@ -2057,7 +2132,9 @@ int main(int argc, char *argv[])
         //sys.stderr
         PyErr_Print();
         printf("unable to find console module, missing file or mangled console.py?\n");
-        return -1;
+        //return -1;
+        pyready=0;
+        pygood=0;
     }
 #else
         printf("python console disabled at compile time.");
@@ -2687,18 +2764,19 @@ int main(int argc, char *argv[])
             }
         }
         #ifdef PYCONSOLE
-        if(pkey!=NULL && sdl_key!=NULL)
-        {
-            pargs=Py_BuildValue("(c)",sdl_key);
-            pvalue = PyObject_CallObject(pkey, pargs);
-            Py_DECREF(pargs);
-            pargs=NULL;
-            if(pvalue==NULL)
-                strcpy(console_error,"failed to execute key code.");
-            //Py_DECREF(pvalue);
-            //puts("a");
-            pvalue=NULL;
-        }
+        if(pyready==1 && pygood==1)
+            if(pkey!=NULL && sdl_key!=NULL)
+            {
+                pargs=Py_BuildValue("(c)",sdl_key);
+                pvalue = PyObject_CallObject(pkey, pargs);
+                Py_DECREF(pargs);
+                pargs=NULL;
+                if(pvalue==NULL)
+                    strcpy(console_error,"failed to execute key code.");
+                //Py_DECREF(pvalue);
+                //puts("a");
+                pvalue=NULL;
+            }
         #endif
 #ifdef INTERNAL
 		int counterthing;
@@ -3599,39 +3677,71 @@ int main(int argc, char *argv[])
 		if(console_mode)
 		{
             #ifdef PYCONSOLE
-			char *console;
-			//char error[255] = "error!";
-			sys_pause = 1;
-			console = console_ui(vid_buf,console_error,console_more);
-			console = mystrdup(console);
-			strcpy(console_error,"");
-			if(process_command(vid_buf,console,&console_error,pfunc)==-1)
-			{
-				free(console);
-				break;
-			}
-			free(console);
-			if(!console_mode)
-				hud_enable = 1;
+            if(pyready==1 && pygood==1)
+            {
+                char *console;
+                //char error[255] = "error!";
+                sys_pause = 1;
+                console = console_ui(vid_buf,console_error,console_more);
+                console = mystrdup(console);
+                strcpy(console_error,"");
+                if(process_command(vid_buf,console,&console_error,pfunc)==-1)
+                {
+                    free(console);
+                    break;
+                }
+                free(console);
+                if(!console_mode)
+                    hud_enable = 1;
+            }
+            else
+            {
+                char *console;
+                sys_pause = 1;
+                console = console_ui(vid_buf,console_error,console_more);
+                console = mystrdup(console);
+                strcpy(console_error,"");
+                if(process_command_old(vid_buf,console,&console_error)==-1)
+                {
+                    free(console);
+                    break;
+                }
+                free(console);
+                if(!console_mode)
+                    hud_enable = 1;
+            }
             #else
-            console_mode=0;
+            char *console;
+            sys_pause = 1;
+            console = console_ui(vid_buf,console_error,console_more);
+            console = mystrdup(console);
+            strcpy(console_error,"");
+            if(process_command_old(vid_buf,console,&console_error)==-1)
+            {
+                free(console);
+                break;
+            }
+            free(console);
+            if(!console_mode)
+                hud_enable = 1;
             #endif
 		}
 		
 		//execute python step hook
 		#ifdef PYCONSOLE
-		if(pstep!=NULL)
-        {
-            pargs=Py_BuildValue("()");
-            pvalue = PyObject_CallObject(pstep, pargs);
-            Py_DECREF(pargs);
-            pargs=NULL;
-            if(pvalue==NULL)
-                strcpy(console_error,"failed to execute step code.");
-            //Py_DECREF(pvalue);
-            //puts("a");
-            pvalue=NULL;
-        }
+		if(pyready==1 && pygood==1)
+            if(pstep!=NULL)
+            {
+                pargs=Py_BuildValue("()");
+                pvalue = PyObject_CallObject(pstep, pargs);
+                Py_DECREF(pargs);
+                pargs=NULL;
+                if(pvalue==NULL)
+                    strcpy(console_error,"failed to execute step code.");
+                //Py_DECREF(pvalue);
+                //puts("a");
+                pvalue=NULL;
+            }
         #endif
 		sdl_blit(0, 0, XRES+BARSIZE, YRES+MENUSIZE, vid_buf, XRES+BARSIZE);
 
@@ -3653,6 +3763,10 @@ int main(int argc, char *argv[])
 	}
 	SDL_CloseAudio();
 	http_done();
+    PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.py'))\nexcept:\n    pass");
+    PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.pyo'))\nexcept:\n    pass");
+    PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.pyc'))\nexcept:\n    pass");
+    
     Py_Finalize();//cleanup any python stuff.
 	return 0;
 }
@@ -3693,3 +3807,472 @@ int process_command(pixel *vid_buf,char *console,char *console_error,PyObject *p
 	return 1;
 }
 #endif
+
+int process_command_old(pixel *vid_buf,char *console,char *console_error) {
+    int y,x,nx,ny,i,j,k,m;
+    int do_next = 1;
+    char xcoord[10];
+    char ycoord[10];
+    char console2[15];
+    char console3[15];
+    char console4[15];
+    char console5[15];
+    //sprintf(console_error, "%s", console);
+    if(console && strcmp(console, "")!=0 && strncmp(console, " ", 1)!=0)
+    {
+        sscanf(console,"%14s %14s %14s %14s", console2, console3, console4, console5);//why didn't i know about this function?!
+        if(strcmp(console2, "quit")==0)
+        {
+            return -1;
+        }
+        else if(strcmp(console2, "file")==0 && console3)
+        {
+            if(file_script){
+                FILE *f=fopen(console3, "r");
+                if(f)
+                {
+                    char fileread[5000];//TODO: make this change with file size
+                    char pch[5000];
+                    char tokens[10];
+                    int tokensize;
+                    nx = 0;
+                    ny = 0;
+                    j = 0;
+                    m = 0;
+                    if(console4)
+                        console_parse_coords(console4, &nx , &ny, console_error);
+                    memset(pch,0,sizeof(pch));
+                    memset(fileread,0,sizeof(fileread));
+                    fread(fileread,1,5000,f);
+                    for(i=0; i<strlen(fileread); i++)
+                    {
+                        if(fileread[i] != '\n')
+                        {
+                            pch[i-j] = fileread[i];
+                            if(fileread[i] != ' ')
+                                tokens[i-m] = fileread[i];
+                        }
+                        if(fileread[i] == ' ' || fileread[i] == '\n')
+                        {
+                            if(sregexp(tokens,"^x.[0-9],y.[0-9]")==0)//TODO: fix regex matching to work with x,y ect, right now it has to have a +0 or -0
+                            {
+                                char temp[5];
+                                int starty = 0;
+                                tokensize = strlen(tokens);
+                                x = 0;
+                                y = 0;
+                                sscanf(tokens,"x%d,y%d",&x,&y);
+                                sscanf(tokens,"%9s,%9s",xcoord,ycoord);
+                                x += nx;
+                                y += ny;
+                                sprintf(xcoord,"%d",x);
+                                sprintf(ycoord,"%d",y);
+                                for(k = 0; k<strlen(xcoord);k++)//rewrite pch with numbers
+                                {
+                                    pch[i-j-tokensize+k] = xcoord[k];
+                                    starty = k+1;
+                                }
+                                pch[i-j-tokensize+starty] = ',';
+                                starty++;
+                                for(k=0;k<strlen(ycoord);k++)
+                                {
+                                    pch[i-j-tokensize+starty+k] = ycoord[k];
+
+                                }
+                                pch[i-j-tokensize +strlen(xcoord) +1 +strlen(ycoord)] = ' ';
+                                j = j -tokensize +strlen(xcoord) +1 +strlen(ycoord);
+                            }
+                            memset(tokens,0,sizeof(tokens));
+                            m = i+1;
+                        }
+                        if(fileread[i] == '\n')
+                        {
+
+                            if(do_next)
+                            {
+                                if(strcmp(pch,"else")==0)
+                                    do_next = 0;
+                                else
+                                    do_next = process_command_old(vid_buf, pch, console_error);
+                            }
+                            else if(strcmp(pch,"endif")==0 || strcmp(pch,"else")==0)
+                                do_next = 1;
+                            memset(pch,0,sizeof(pch));
+                            j = i+1;
+                        }
+                    }
+                    //sprintf(console_error, "%s exists", console3);
+                    fclose(f);
+                }
+                else
+                {
+                    sprintf(console_error, "%s does not exist", console3);
+                }
+            }
+            else 
+            {
+                sprintf(console_error, "Scripts are not enabled");
+            }
+
+        }
+        else if(strcmp(console2, "sound")==0 && console3)
+        {
+            if (sound_enable) play_sound(console3);
+            else strcpy(console_error, "Audio device not available - cannot play sounds");
+        }
+        else if(strcmp(console2, "python")==0)
+            if(pygood==1)
+                pyready=1;
+            else
+                strcpy(console_error, "python not ready. check stdout for more info.");
+        else if(strcmp(console2, "load")==0 && console3)
+        {
+            j = atoi(console3);
+            if(j)
+            {
+                open_ui(vid_buf, console3, NULL);
+                console_mode = 0;
+            }
+        }
+        else if(strcmp(console2, "if")==0 && console3)
+        {
+            if(strcmp(console3, "type")==0)//TODO: add more than just type, and be able to check greater/less than
+            {
+                if (console_parse_partref(console4, &i, console_error)
+                    && console_parse_type(console5, &j, console_error))
+                {
+                    if(parts[i].type==j)
+                        return 1;
+                    else
+                        return 0;
+                }
+                else
+                    return 0;
+            }
+        }
+        else if (strcmp(console2, "create")==0 && console3 && console4)
+        {
+            if (console_parse_type(console3, &j, console_error)
+                    && console_parse_coords(console4, &nx, &ny, console_error))
+            {
+                if (!j)
+                    strcpy(console_error, "Cannot create particle with type NONE");
+                else if (create_part(-1,nx,ny,j)<0)
+                    strcpy(console_error, "Could not create particle");
+            }
+        }
+        else if ((strcmp(console2, "delete")==0 || strcmp(console2, "kill")==0) && console3)
+        {
+            if (console_parse_partref(console3, &i, console_error))
+                kill_part(i);
+        }
+        else if(strcmp(console2, "reset")==0 && console3)
+        {
+            if(strcmp(console3, "pressure")==0)
+            {
+                for (nx = 0; nx<XRES/CELL; nx++)
+                    for (ny = 0; ny<YRES/CELL; ny++)
+                    {
+                        pv[ny][nx] = 0;
+                    }
+            }
+            else if(strcmp(console3, "velocity")==0)
+            {
+                for (nx = 0; nx<XRES/CELL; nx++)
+                    for (ny = 0; ny<YRES/CELL; ny++)
+                    {
+                        vx[ny][nx] = 0;
+                        vy[ny][nx] = 0;
+                    }
+            }
+            else if(strcmp(console3, "sparks")==0)
+            {
+                for(i=0; i<NPART; i++)
+                {
+                    if(parts[i].type==PT_SPRK)
+                    {
+                        parts[i].type = parts[i].ctype;
+                        parts[i].life = 4;
+                    }
+                }
+            }
+            else if(strcmp(console3, "temp")==0)
+            {
+                for(i=0; i<NPART; i++)
+                {
+                    if(parts[i].type)
+                    {
+                        parts[i].temp = ptypes[parts[i].type].heat;
+                    }
+                }
+            }
+        }
+        else if(strcmp(console2, "set")==0 && console3 && console4 && console5)
+        {
+            if(strcmp(console3, "life")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].life = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].life = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].life = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "type")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    if (console_parse_type(console5, &j, console_error))
+                        for(i=0; i<NPART; i++)
+                        {
+                            if(parts[i].type)
+                                parts[i].type = j;
+                        }
+                }
+                else if (console_parse_type(console4, &j, console_error)
+                         && console_parse_type(console5, &k, console_error))
+                {
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].type = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error)
+                            && console_parse_type(console5, &j, console_error))
+                    {
+                        parts[i].type = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "temp")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].temp = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].temp= k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].temp = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "tmp")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].tmp = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].tmp = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].tmp = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "x")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].x = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].x = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].x = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "y")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].y = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].y = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].y = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "ctype")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    if (console_parse_type(console5, &j, console_error))
+                        for(i=0; i<NPART; i++)
+                        {
+                            if(parts[i].type)
+                                parts[i].ctype = j;
+                        }
+                }
+                else if (console_parse_type(console4, &j, console_error)
+                         && console_parse_type(console5, &k, console_error))
+                {
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].ctype = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error)
+                            && console_parse_type(console5, &j, console_error))
+                    {
+                        parts[i].ctype = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "vx")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].vx = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].vx = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].vx = j;
+                    }
+                }
+            }
+            if(strcmp(console3, "vy")==0)
+            {
+                if(strcmp(console4, "all")==0)
+                {
+                    j = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type)
+                            parts[i].vy = j;
+                    }
+                }
+                else if (console_parse_type(console4, &j, console_error))
+                {
+                    k = atoi(console5);
+                    for(i=0; i<NPART; i++)
+                    {
+                        if(parts[i].type == j)
+                            parts[i].vy = k;
+                    }
+                }
+                else
+                {
+                    if (console_parse_partref(console4, &i, console_error))
+                    {
+                        j = atoi(console5);
+                        parts[i].vy = j;
+                    }
+                }
+            }
+        }
+        else
+            sprintf(console_error, "Invalid Command", console2);
+    }
+    return 1;
+}
