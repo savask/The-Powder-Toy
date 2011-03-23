@@ -2169,11 +2169,8 @@ int main(int argc, char *argv[])
 			int size;
 			void *file_data;
 			char fn[64];
-
 			strncpy(fn, argv[i]+5, strlen(argv[i]+5));
-
 			file_data = file_load(fn, &size);
-
 			if(file_data)
 			{
 				it=0;
