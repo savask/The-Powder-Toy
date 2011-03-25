@@ -1991,7 +1991,7 @@ int main(int argc, char *argv[])
 	int is_beta = 0;
 #endif
 	char uitext[512] = "";
-	char heattext[128] = "";
+	char heattext[256] = "";
 	char coordtext[128] = "";
 	int currentTime = 0;
 	int FPS = 0;
@@ -2856,7 +2856,7 @@ int main(int argc, char *argv[])
 				if (DEBUG_MODE)
 				{
 					int tctype = parts[cr>>8].ctype;
-					if (tctype>=PT_NUM || (cr&0xFF)==PT_PHOT)
+					if (tctype>=PT_NUM || tctype<0 || (cr&0xFF)==PT_PHOT)
 						tctype = 0;
 					if ((cr&0xFF)==PT_PIPE)
 					{
@@ -3200,8 +3200,14 @@ int main(int argc, char *argv[])
 					{
 						if (!svf_open || !svf_own || x>51)
 						{
-							if (save_name_ui(vid_buf))
+							if (save_name_ui(vid_buf)){
 								execute_save(vid_buf);
+								if(svf_id[0]){
+									char tmpstring[256] = "";
+									sprintf(tmpstring, "Save uploaded with the ID %s", svf_id);
+									info_ui(vid_buf, "Uploaded new save", tmpstring);
+								}
+							}
 						}
 						else
 							execute_save(vid_buf);
