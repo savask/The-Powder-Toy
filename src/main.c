@@ -29,6 +29,8 @@
 #ifdef PYCONSOLE
 #include "Python.h"
 #include "pyconsole.h"
+//#include "pystdlib.h"
+#include <marshal.h>
 char pyready=1;
 char pygood=1;
 #endif
@@ -1366,7 +1368,7 @@ static PyObject* emb_set_life(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1407,7 +1409,7 @@ static PyObject* emb_set_type(PyObject *self, PyObject *args, PyObject *keywds)
     int i = -1,life,j=-1,x=-1,y=-1;
     char *name = "";
     char *type = "";
-    char *kwlist[] = {"setto", "settoint", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "settoint", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "|sIsIII:set_type",kwlist ,&type,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1448,7 +1450,7 @@ static PyObject* emb_set_temp(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1488,7 +1490,7 @@ static PyObject* emb_set_tmp(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1529,7 +1531,7 @@ static PyObject* emb_set_x(PyObject *self, PyObject *args, PyObject *keywds)
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
     char *type = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1569,7 +1571,7 @@ static PyObject* emb_set_y(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
@@ -1610,8 +1612,8 @@ static PyObject* emb_set_ctype(PyObject *self, PyObject *args, PyObject *keywds)
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
     char *type = "";
-    char *kwlist[] = {"setto", "settoint", "from", "i", "x", "y", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, keywds, "s|IsIII:set_type",kwlist ,&type, &life, &name,&i,&x,&y))
+    char *kwlist[] = {"setto", "settoint", "setfrom", "i", "x", "y", NULL};
+    if(!PyArg_ParseTupleAndKeywords(args, keywds, "|sIsIII:set_type",kwlist ,&type, &life, &name,&i,&x,&y))
         return NULL;
     //
     if(strcmp(name,"")==0 && x==-1 && y==-1 && i==-1)
@@ -1652,8 +1654,8 @@ static PyObject* emb_set_vx(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
+    if(!PyArg_ParseTupleAndKeywords(args, keywds, "f|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
     if(strcmp(name,"")==0 && x==-1 && y==-1 && i==-1)
@@ -1692,8 +1694,8 @@ static PyObject* emb_set_vy(PyObject *self, PyObject *args, PyObject *keywds)
 {
     int i = -1,life,j,x=-1,y=-1;
     char *name = "";
-    char *kwlist[] = {"setto", "from", "i", "x", "y", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
+    char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
+    if(!PyArg_ParseTupleAndKeywords(args, keywds, "f|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
         return NULL;
     //
     if(strcmp(name,"")==0 && x==-1 && y==-1 && i==-1)
@@ -1939,6 +1941,63 @@ static PyObject* emb_disable_python(PyObject *self, PyObject *args)
     return Py_BuildValue("i",1);
 }
 
+int bsx = 2, bsy = 2, sl=1, sr=0;
+static PyObject*
+emb_get_tool(PyObject *self, PyObject *args)
+{
+    if(!PyArg_ParseTuple(args, ":get_tool"))
+        return NULL;
+    return Py_BuildValue("((ii)(ii)i)",bsx,bsy,sl,sr,CURRENT_BRUSH);
+}
+
+static PyObject*
+emb_set_tool(PyObject *self, PyObject *args)
+{
+    if(!PyArg_ParseTuple(args, "((ii)(ii)i):set_tool",&bsx,&bsy,&sl,&sr,&CURRENT_BRUSH))
+        return NULL;
+    return Py_BuildValue("i",1);
+}
+
+/*
+static PyObject*
+emb_press_mouse(PyObject *self, PyObject *args)
+{
+    int x,y,b;
+    SDL_Event* ev;
+    b=0;
+    if(!PyArg_ParseTuple(args, "ii|i:handle_tool",&x,&y,&b))
+        return NULL;
+    ev.type=SDL_MOUSEBUTTONDOWN;
+    if(b==2)
+        ev.button.button=SDL_BUTTON_RIGHT;
+    else
+        ev.button.button=SDL_BUTTON_LEFT;
+    ev.button.state=SDL_PRESSED;
+    ev.button.x=x;
+    ev.button.y=y;
+    return Py_BuildValue("i",SDL_PushEvent(ev));
+}
+
+static PyObject*
+emb_release_mouse(PyObject *self, PyObject *args)
+{
+    int x,y,b;
+    SDL_MouseButtonEvent ev;
+    b=0;
+    if(!PyArg_ParseTuple(args, "ii|i:handle_tool",&x,&y,&b))
+        return NULL;
+    ev.type=SDL_MOUSEBUTTONUP;
+    if(b==2)
+        ev.button.button=SDL_BUTTON_RIGHT;
+    else
+        ev.button.button=SDL_BUTTON_LEFT;
+    ev.button.state=SDL_RELEASED;
+    ev.button.x=x;
+    ev.button.y=y;
+    return Py_BuildValue("i",SDL_PushEvent(ev));
+}*/
+
+
 static PyMethodDef EmbMethods[] = { //WARNING! don't forget to register your function here!
     {"create",		    (PyCFunction)emb_create, 		METH_VARARGS|METH_KEYWORDS,	"create a particle."},
     {"log", 		    (PyCFunction)emb_log, 		METH_VARARGS,			"logs an error string to the console."},
@@ -1979,6 +2038,8 @@ static PyMethodDef EmbMethods[] = { //WARNING! don't forget to register your fun
     {"set_pressure",        (PyCFunction)emb_set_pressure,       METH_VARARGS,           "set pressure"},
     {"set_velocity",        (PyCFunction)emb_set_velocity,       METH_VARARGS,           "set velocity"},
     {"disable_python",        (PyCFunction)emb_disable_python,       METH_VARARGS,           "switch back to the old console."},
+    {"get_tool",        (PyCFunction)emb_get_tool,       METH_VARARGS,           "get tool size/type and selected particles"},
+    {"set_tool",        (PyCFunction)emb_set_tool,       METH_VARARGS,           "set tool size/type and selected particles"},
     {NULL, NULL, 0, NULL}
 };
 #endif
@@ -3248,7 +3309,7 @@ int main(int argc, char *argv[])
 					lb = 0;
 				}
 			}
-			else if (y<YRES)
+			else if (y<YRES)//mouse handling
 			{
 				int signi;
 
@@ -3301,6 +3362,16 @@ int main(int argc, char *argv[])
 										fvx[j][i] = nfvx;
 										fvy[j][i] = nfvy;
 										bmap[j][i] = WL_FAN;
+									}
+						}
+						if (c == PT_WIND)
+						{
+							for (j=-bsy; j<=bsy; j++)
+								for (i=-bsx; i<=bsx; i++)
+									if (x+i>0 && y+j>0 && x+i<XRES && y+j<YRES && ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(bsx,2))+(pow(j,2))/(pow(bsy,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=bsy*bsx)))
+									{
+										vx[(ly+j)/CELL][(lx+i)/CELL] += (x-lx)*0.002f;
+										vy[(ly+j)/CELL][(lx+i)/CELL] += (y-ly)*0.002f;
 									}
 						}
 					}
