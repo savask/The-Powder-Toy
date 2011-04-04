@@ -56,7 +56,7 @@ static menu_wall mwalls[] =
 #define SC_CRACKER2 13
 #define SC_TOTAL 10
 
-static menu_section msections[] =
+static menu_section msections[] = //itemcount and doshow do not do anything currently.
 {
 	{"\xC1", "Walls", 0, 1},
 	{"\xC2", "Electronics", 0, 1},
@@ -176,6 +176,8 @@ void draw_svf_ui(pixel *vid_buf);
 void error_ui(pixel *vid_buf, int err, char *txt);
 
 void info_ui(pixel *vid_buf, char *top, char *txt);
+
+void copytext_ui(pixel *vid_buf, char *top, char *txt, char *copytxt);
 
 void info_box(pixel *vid_buf, char *msg);
 

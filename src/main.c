@@ -31,9 +31,9 @@
 #include "pyconsole.h"
 //#include "pystdlib.h"
 #include <marshal.h>
+#endif
 char pyready=1;
 char pygood=1;
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,6 +87,7 @@ void mixaudio(void *unused, Uint8 *stream, int len)
 	}
 }
 
+//plays a .wav file (sounds must be enabled)
 void play_sound(char *file)
 {
 	int index;
@@ -310,6 +311,7 @@ void *build_thumb(int *size, int bzip2)
 	return d;
 }
 
+//the saving function
 void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr)
 {
 	unsigned char *d=calloc(1,3*(XRES/CELL)*(YRES/CELL)+(XRES*YRES)*11+MAXSIGNS*262), *c;
@@ -652,9 +654,10 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 			gol[x][y]=0;
 			if (j)// && !(isplayer == 1 && j==PT_STKM))
 			{
-				if (pmap[y][x])
+				if (pmap[y][x] && (pmap[y][x]>>8)<NPART)
 				{
 					k = pmap[y][x]>>8;
+					memset(parts+k, 0, sizeof(particle));
 					parts[k].type = j;
 					if (j == PT_PHOT)
 						parts[k].ctype = 0x3fffffff;
@@ -664,6 +667,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				}
 				else if (i < nf)
 				{
+					memset(parts+fp[i], 0, sizeof(particle));
 					parts[fp[i]].type = j;
 					if (j == PT_COAL)
 						parts[fp[i]].tmp = 50;
@@ -1200,6 +1204,7 @@ char my_uri[] = "http://" SERVER "/Update.api?Action=Download&Architecture="
 
                 
 char console_error[255] = "";
+char console_more=0;
 
 #ifdef PYCONSOLE
 /* 
@@ -1301,8 +1306,6 @@ static PyObject* emb_log(PyObject *self, PyObject *args)
     return Py_BuildValue("i",1);
 }
 
-char console_more=0;
-
 static PyObject* emb_console_more(PyObject *self, PyObject *args)
 {
     if(!PyArg_ParseTuple(args, ":log"))
@@ -1323,45 +1326,48 @@ static PyObject* emb_console_less(PyObject *self, PyObject *args)
 
 static PyObject* emb_reset_pressure(PyObject *self, PyObject *args)
 {
-    if(!PyArg_ParseTuple(args, ":reset_pressure"))
-        return NULL;
-    //
-        for (int nx = 0; nx<XRES/CELL; nx++)
-            for (int ny = 0; ny<YRES/CELL; ny++)
-            {
-                pv[ny][nx] = 0;
-            }
-    return Py_BuildValue("i",1);
+	int nx, ny;
+	if(!PyArg_ParseTuple(args, ":reset_pressure"))
+		return NULL;
+	//
+	for (nx = 0; nx<XRES/CELL; nx++)
+		for (ny = 0; ny<YRES/CELL; ny++)
+		{
+			pv[ny][nx] = 0;
+		}
+	return Py_BuildValue("i",1);
 }
 
 static PyObject* emb_reset_velocity(PyObject *self, PyObject *args)
 {
-    if(!PyArg_ParseTuple(args, ":reset_velocity"))
-        return NULL;
-    //
-        for (int nx = 0; nx<XRES/CELL; nx++)
-            for (int ny = 0; ny<YRES/CELL; ny++)
-            {
-                vx[ny][nx] = 0;
-                vy[ny][nx] = 0;
-            }
-    return Py_BuildValue("i",1);
+	int nx, ny;
+	if(!PyArg_ParseTuple(args, ":reset_velocity"))
+		return NULL;
+	//
+	for (nx = 0; nx<XRES/CELL; nx++)
+		for (ny = 0; ny<YRES/CELL; ny++)
+		{
+			vx[ny][nx] = 0;
+			vy[ny][nx] = 0;
+		}
+	return Py_BuildValue("i",1);
 }
 
 static PyObject* emb_reset_sparks(PyObject *self, PyObject *args)
 {
-    if(!PyArg_ParseTuple(args, ":reset_sparks"))
-        return NULL;
-    //
-        for(int i=0; i<NPART; i++)
-        {
-            if(parts[i].type==PT_SPRK)
-            {
-                parts[i].type = parts[i].ctype;
-                parts[i].life = 4;
-            }
-        }
-    return Py_BuildValue("i",1);
+	int i;
+	if(!PyArg_ParseTuple(args, ":reset_sparks"))
+		return NULL;
+	//
+	for(i=0; i<NPART; i++)
+	{
+		if(parts[i].type==PT_SPRK)
+		{
+			parts[i].type = parts[i].ctype;
+			parts[i].life = 4;
+		}
+	}
+	return Py_BuildValue("i",1);
 }
 
 static PyObject* emb_set_life(PyObject *self, PyObject *args, PyObject *keywds)
@@ -1448,10 +1454,11 @@ static PyObject* emb_set_type(PyObject *self, PyObject *args, PyObject *keywds)
 
 static PyObject* emb_set_temp(PyObject *self, PyObject *args, PyObject *keywds)
 {
-    int i = -1,life,j,x=-1,y=-1;
+    int i = -1,j,x=-1,y=-1;
+    float newval;
     char *name = "";
     char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, keywds, "I|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
+    if(!PyArg_ParseTupleAndKeywords(args, keywds, "f|sIII:set_type", kwlist, &newval, &name, &i, &x, &y))
         return NULL;
     //
     if(strcmp(name,"")==0 && x==-1 && y==-1 && i==-1)
@@ -1461,7 +1468,7 @@ static PyObject* emb_set_temp(PyObject *self, PyObject *args, PyObject *keywds)
             for(i=0; i<NPART; i++)
             {
                 if(parts[i].type)
-                    parts[i].temp = life;
+                    parts[i].temp = newval;
             }
         }
         else if(console_parse_type(name, &j, console_error))
@@ -1469,19 +1476,19 @@ static PyObject* emb_set_temp(PyObject *self, PyObject *args, PyObject *keywds)
             for(i=0; i<NPART; i++)
             {
                 if(parts[i].type == j)
-                    parts[i].temp = life;
+                    parts[i].temp = newval;
             }
         }
 	else if(i!=-1)
 	{
 		if(parts[i].type != PT_NONE)
-			parts[i].temp = life;
+			parts[i].temp = newval;
 
 	}
 	else if(x!=-1 && y!=-1 && x>=0 && x<XRES && y>=0 && y<YRES)
 	{
 		if(parts[pmap[y][x]>>8].type != PT_NONE)
-			parts[pmap[y][x]>>8].temp = life;
+			parts[pmap[y][x]>>8].temp = newval;
 	}
         return Py_BuildValue("i",1);
 }
@@ -1652,7 +1659,8 @@ static PyObject* emb_set_ctype(PyObject *self, PyObject *args, PyObject *keywds)
 
 static PyObject* emb_set_vx(PyObject *self, PyObject *args, PyObject *keywds)
 {
-    int i = -1,life,j,x=-1,y=-1;
+    int i = -1,j,x=-1,y=-1;
+    float life;
     char *name = "";
     char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "f|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
@@ -1692,7 +1700,8 @@ static PyObject* emb_set_vx(PyObject *self, PyObject *args, PyObject *keywds)
 
 static PyObject* emb_set_vy(PyObject *self, PyObject *args, PyObject *keywds)
 {
-    int i = -1,life,j,x=-1,y=-1;
+    int i = -1,j,x=-1,y=-1;
+    float life;
     char *name = "";
     char *kwlist[] = {"setto", "setfrom", "i", "x", "y", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, keywds, "f|sIII:set_type",kwlist ,&life,&name,&i,&x,&y))
@@ -1892,7 +1901,6 @@ static PyObject* emb_get_modifier(PyObject *self, PyObject *args)
 
 static PyObject* emb_set_keyrepeat(PyObject *self, PyObject *args)
 {
-    ////SDL_EnableKeyRepeat(delay,interval)
     int keydelay,keyinterval;
     keydelay=SDL_DEFAULT_REPEAT_DELAY;
     keyinterval=SDL_DEFAULT_REPEAT_INTERVAL;
@@ -1904,7 +1912,6 @@ static PyObject* emb_set_keyrepeat(PyObject *self, PyObject *args)
 //delete_part
 static PyObject* emb_delete(PyObject *self, PyObject *args)
 {
-    ////SDL_EnableKeyRepeat(delay,interval)
     int x,y;
     if(!PyArg_ParseTuple(args, "ii:delete",&x,&y))
         return NULL;
@@ -1914,7 +1921,6 @@ static PyObject* emb_delete(PyObject *self, PyObject *args)
 
 static PyObject* emb_set_pressure(PyObject *self, PyObject *args)
 {
-    ////SDL_EnableKeyRepeat(delay,interval)
     int x,y,press;
     if(!PyArg_ParseTuple(args, "iii:set_pressure",&x,&y,&press))
         return NULL;
@@ -1924,7 +1930,6 @@ static PyObject* emb_set_pressure(PyObject *self, PyObject *args)
 
 static PyObject* emb_set_velocity(PyObject *self, PyObject *args)
 {
-    ////SDL_EnableKeyRepeat(delay,interval)
     int x,y,xv,yv;
     if(!PyArg_ParseTuple(args, "iiii:set_velocity",&x,&y,&xv,&yv))
         return NULL;
@@ -2057,10 +2062,10 @@ int main(int argc, char *argv[])
 	int currentTime = 0;
 	int FPS = 0;
 	int pastFPS = 0;
-	int past = 0;
+	int elapsedTime = 0;
+	int limitFPS = 60;
 	void *http_ver_check;
 	void *http_session_check = NULL;
-    vid_buf=calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	char *ver_data=NULL, *check_data=NULL, *tmp;
     //char console_error[255] = "";
 	int i, j, bq, fire_fc=0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, old_ver_len;
@@ -2077,11 +2082,13 @@ int main(int argc, char *argv[])
 	int save_mode=0, save_x=0, save_y=0, save_w=0, save_h=0, copy_mode=0;
 	SDL_AudioSpec fmt;
 	int username_flash = 0, username_flash_t = 1;
+#ifdef PYCONSOLE
+	PyObject *pname,*pmodule,*pfunc,*pvalue,*pargs,*pstep,*pkey;
+	PyObject *tpt_console_obj;
+#endif
+	vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	GSPEED = 1;
-    #ifdef PYCONSOLE
-    PyObject *pname,*pmodule,*pfunc,*pvalue,*pargs,*pstep,*pkey;
-    #endif
 
 	/* Set 16-bit stereo audio at 22Khz */
 	fmt.freq = 22050;
@@ -2107,7 +2114,7 @@ int main(int argc, char *argv[])
     pmodule = PyImport_Import(pname);//import module
     Py_DECREF(pname);//throw away string
 #else
-    PyObject *tpt_console_obj = PyMarshal_ReadObjectFromString(tpt_console_pyc+8, sizeof(tpt_console_pyc)-8);
+    tpt_console_obj = PyMarshal_ReadObjectFromString(tpt_console_pyc+8, sizeof(tpt_console_pyc)-8);
     pmodule=PyImport_ExecCodeModule("tpt_console", tpt_console_obj);
 #endif
     if(pmodule!=NULL)
@@ -2250,7 +2257,7 @@ int main(int argc, char *argv[])
 
 	sdl_open();
 	http_init(http_proxy_string[0] ? http_proxy_string : NULL);
-
+	
 	if (cpu_check())
 	{
 		error_ui(vid_buf, 0, "Unsupported CPU. Try another version.");
@@ -2267,25 +2274,25 @@ int main(int argc, char *argv[])
 		http_auth_headers(http_session_check, svf_user_id, NULL, svf_session_id);
 	}
 
-	while (!sdl_poll())
+	while (!sdl_poll()) //the main loop
 	{
-		if (!sys_pause||framerender)
+		if (!sys_pause||framerender) //only update air if not paused
 		{
 			update_air();
 		}
 #ifdef OpenGL
 		ClearScreen();
 #else
-		if (cmode==CM_VEL || cmode==CM_PRESS || cmode==CM_CRACK)
+		if (cmode==CM_VEL || cmode==CM_PRESS || cmode==CM_CRACK)//air only gets drawn in these modes
 		{
 			draw_air(vid_buf);
 		}
-		else if (cmode==CM_PERS)
+		else if (cmode==CM_PERS)//save background for persistent, then clear
 		{
 			memcpy(vid_buf, pers_bg, (XRES+BARSIZE)*YRES*PIXELSIZE);
 			memset(vid_buf+((XRES+BARSIZE)*YRES), 0, ((XRES+BARSIZE)*YRES*PIXELSIZE)-((XRES+BARSIZE)*YRES*PIXELSIZE));
 		}
-		else
+		else //clear screen every frame
 		{
 			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 		}
@@ -2301,12 +2308,12 @@ int main(int argc, char *argv[])
 		if (bsy<0)
 			bsy = 0;
 
-		update_particles(vid_buf);
-		draw_parts(vid_buf);
+		update_particles(vid_buf); //update everything
+		draw_parts(vid_buf); //draw particles
 
 		if (cmode==CM_PERS)
 		{
-			if (!fire_fc)
+			if (!fire_fc)//fire_fc has nothing to do with fire... it is a counter for diminishing persistent view every 3 frames
 			{
 				dim_copy_pers(pers_bg, vid_buf);
 			}
@@ -2321,7 +2328,7 @@ int main(int argc, char *argv[])
 
 		render_signs(vid_buf);
 
-		memset(vid_buf+((XRES+BARSIZE)*YRES), 0, (PIXELSIZE*(XRES+BARSIZE))*MENUSIZE);
+		memset(vid_buf+((XRES+BARSIZE)*YRES), 0, (PIXELSIZE*(XRES+BARSIZE))*MENUSIZE);//clear menu areas
 		clearrect(vid_buf, XRES-1, 0, BARSIZE+1, YRES);
 
 		draw_svf_ui(vid_buf);
@@ -2378,7 +2385,7 @@ int main(int argc, char *argv[])
 						svf_own = 0;
 						svf_admin = 0;
 						svf_mod = 0;
-						error_ui(vid_buf, "Unable to log in", "Your account has been suspended, consider reading the rules.");
+						error_ui(vid_buf, 0, "Unable to log in\nYour account has been suspended, consider reading the rules.");
 					}
 					else if(!strncmp(check_data, "OK", 2))
 					{
@@ -2411,6 +2418,16 @@ int main(int argc, char *argv[])
 					}
 					save_presets(0);
 					free(check_data);
+				} else {
+					//Unable to check session, YOU WILL BE TERMINATED
+					strcpy(svf_user, "");
+					strcpy(svf_pass, "");
+					strcpy(svf_user_id, "");
+					strcpy(svf_session_id, "");
+					svf_login = 0;
+					svf_own = 0;
+					svf_admin = 0;
+					svf_mod = 0;
 				}
 				http_session_check = NULL;
 			} else {
@@ -2433,7 +2450,7 @@ int main(int argc, char *argv[])
 			do_s_check = (do_s_check+1) & 15;
 		}
         
-        if(sys_shortcuts==1)
+        if(sys_shortcuts==1)//all shortcuts can be disabled by python scripts
         {
             if (sdl_key=='q' || sdl_key==SDLK_ESCAPE)
             {
@@ -2742,18 +2759,42 @@ int main(int argc, char *argv[])
                     }
                 }
             }
-            if (sdl_key=='r'&&(sdl_mod & (KMOD_CTRL))&&(sdl_mod & (KMOD_SHIFT)))
-            {
-                save_mode = 1;
-                copy_mode = 4;//invert
-            }
-            else if (sdl_key=='r'&&(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))
-            {
-                save_mode = 1;
-                copy_mode = 3;//rotate
-            }
-            else if (sdl_key=='r')
-                GENERATION = 0;
+            if (load_mode==1)
+			{
+				matrix2d transform = m2d_identity;
+				vector2d translate = v2d_zero;
+				void *ndata;
+				int doTransform = 0;
+				if (sdl_key=='r'&&(sdl_mod & (KMOD_CTRL))&&(sdl_mod & (KMOD_SHIFT)))
+				{
+					transform = m2d_new(-1,0,0,1); //horizontal invert
+					doTransform = 1;
+				}
+				else if (sdl_key=='r'&&(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))
+				{
+					transform = m2d_new(0,1,-1,0); //rotate anticlockwise 90 degrees
+					doTransform = 1;
+				}
+				else if (sdl_mod & (KMOD_CTRL))
+				{
+					doTransform = 1;
+					if (sdl_key==SDLK_LEFT) translate = v2d_new(-1,0);
+					else if (sdl_key==SDLK_RIGHT) translate = v2d_new(1,0);
+					else if (sdl_key==SDLK_UP) translate = v2d_new(0,-1);
+					else if (sdl_key==SDLK_DOWN) translate = v2d_new(0,1);
+					else doTransform = 0;
+				}
+				if (doTransform)
+				{
+					ndata = transform_save(load_data, &load_size, transform, translate);
+					if (ndata!=load_data) free(load_data);
+					free(load_img);
+					load_data = ndata;
+					load_img = prerender_save(load_data, load_size, &load_w, &load_h);
+				}
+			}
+			if (sdl_key=='r'&&!(sdl_mod & (KMOD_CTRL|KMOD_SHIFT)))
+				GENERATION = 0;
             if (sdl_key=='x'&&(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))
             {
                 save_mode = 1;
@@ -2807,7 +2848,7 @@ int main(int argc, char *argv[])
         #endif
 #ifdef INTERNAL
 		int counterthing;
-		if (sdl_key=='v'&&!(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))
+		if (sdl_key=='v'&&!(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))//frame capture
 		{
 			if (sdl_mod & (KMOD_SHIFT)) {
 				if (vs>=1)
@@ -2837,7 +2878,7 @@ int main(int argc, char *argv[])
 
 		if (sdl_wheel)
 		{
-			if (sdl_zoom_trig==1)
+			if (sdl_zoom_trig==1)//zoom window change
 			{
 				ZSIZE += sdl_wheel;
 				if (ZSIZE>60)
@@ -2847,7 +2888,7 @@ int main(int argc, char *argv[])
 				ZFACTOR = 256/ZSIZE;
 				sdl_wheel = 0;
 			}
-			else
+			else //change brush size
 			{
 				if (!(sdl_mod & (KMOD_SHIFT|KMOD_CTRL)))
 				{
@@ -2880,24 +2921,24 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		bq = b;
-		b = SDL_GetMouseState(&x, &y);
+		bq = b; // bq is previous mouse state
+		b = SDL_GetMouseState(&x, &y); // b is current mouse state
 
-		for (i=0; i<SC_TOTAL; i++)
+		for (i=0; i<SC_TOTAL; i++)//draw all the menu sections
 		{
 			draw_menu(vid_buf, i, active_menu);
 		}
 
-		for (i=0; i<SC_TOTAL; i++)
+		for (i=0; i<SC_TOTAL; i++)//check mouse position to see if it is on a menu section
 		{
 			if (!b&&x>=sdl_scale*(XRES-2) && x<sdl_scale*(XRES+BARSIZE-1) &&y>= sdl_scale*((i*16)+YRES+MENUSIZE-16-(SC_TOTAL*16)) && y<sdl_scale*((i*16)+YRES+MENUSIZE-16-(SC_TOTAL*16)+15))
 			{
 				active_menu = i;
 			}
 		}
-		menu_ui_v3(vid_buf, active_menu, &sl, &sr, b, bq, x, y);
+		menu_ui_v3(vid_buf, active_menu, &sl, &sr, b, bq, x, y); //draw the elements in the current menu
 
-		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy
+		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy //change mouse position while it is in a zoom window
 		        && x<sdl_scale*(zoom_wx+ZFACTOR*ZSIZE)
 		        && y<sdl_scale*(zoom_wy+ZFACTOR*ZSIZE))
 		{
@@ -2906,7 +2947,7 @@ int main(int argc, char *argv[])
 		}
 		if (y>0 && y<sdl_scale*YRES && x>0 && x<sdl_scale*XRES)
 		{
-			int cr;
+			int cr; //cr is particle under mouse, for drawing HUD information
 			if (photons[y/sdl_scale][x/sdl_scale]) {
 				cr = photons[y/sdl_scale][x/sdl_scale];
 			} else {
@@ -3001,7 +3042,7 @@ int main(int argc, char *argv[])
 			else
 				free(tmp);
 		}
-		if (y>=sdl_scale*(YRES+(MENUSIZE-20)))
+		if (y>=sdl_scale*(YRES+(MENUSIZE-20))) //mouse checks for buttons at the bottom, to draw mouseover texts
 		{
 			if (x>=189*sdl_scale && x<=202*sdl_scale && svf_login && svf_open && svf_myvote==0)
 			{
@@ -3088,7 +3129,7 @@ int main(int argc, char *argv[])
 			else if (da > 0)
 				da --;
 		}
-		else if (da > 0)
+		else if (da > 0)//fade away mouseover text
 			da --;
 
 		if (!sdl_zoom_trig && zoom_en==1)
@@ -3119,7 +3160,7 @@ int main(int argc, char *argv[])
 				load_mode = 0;
 			}
 		}
-		else if (save_mode==1)
+		else if (save_mode==1)//getting the area you are selecting
 		{
 			save_x = (mx/sdl_scale)/CELL;
 			save_y = (my/sdl_scale)/CELL;
@@ -3147,14 +3188,14 @@ int main(int argc, char *argv[])
 			if (save_h<1) save_h = 1;
 			if (!b)
 			{
-				if (copy_mode==1)
+				if (copy_mode==1)//CTRL-C, copy
 				{
 					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts);
 					clipboard_ready = 1;
 					save_mode = 0;
 					copy_mode = 0;
 				}
-				else if (copy_mode==2)
+				else if (copy_mode==2)//CTRL-X, cut
 				{
 					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts);
 					clipboard_ready = 1;
@@ -3162,7 +3203,7 @@ int main(int argc, char *argv[])
 					copy_mode = 0;
 					clear_area(save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL);
 				}
-				else
+				else//normal save
 				{
 					stamp_save(save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL);
 					save_mode = 0;
@@ -3187,15 +3228,15 @@ int main(int argc, char *argv[])
 			if (!b && bq)
 				zoom_en = 2;
 		}
-		else if (b)
+		else if (b)//there is a click
 		{
 			if (it > 50)
 				it = 50;
 			x /= sdl_scale;
 			y /= sdl_scale;
-			if (y>=YRES+(MENUSIZE-20))
+			if (y>=YRES+(MENUSIZE-20))//check if mouse is on menu buttons
 			{
-				if (!lb)
+				if (!lb)//mouse is NOT held down, so it is a first click
 				{
 					if (x>=189 && x<=202 && svf_login && svf_open && svf_myvote==0 && svf_own==0)
 					{
@@ -3264,9 +3305,7 @@ int main(int argc, char *argv[])
 							if (save_name_ui(vid_buf)){
 								execute_save(vid_buf);
 								if(svf_id[0]){
-									char tmpstring[256] = "";
-									sprintf(tmpstring, "Save uploaded with the ID %s", svf_id);
-									info_ui(vid_buf, "Uploaded new save", tmpstring);
+									copytext_ui(vid_buf, "Save ID", "Saved successfully!", svf_id);
 								}
 							}
 						}
@@ -3309,11 +3348,11 @@ int main(int argc, char *argv[])
 					lb = 0;
 				}
 			}
-			else if (y<YRES)//mouse handling
+			else if (y<YRES)// mouse is in playing field
 			{
 				int signi;
 
-				c = (b&1) ? sl : sr;
+				c = (b&1) ? sl : sr; //c is element to be spawned
 				su = c;
 
 				if(c!=WL_SIGN+100)
@@ -3345,9 +3384,10 @@ int main(int argc, char *argv[])
 					if (!bq)
 						add_sign_ui(vid_buf, x, y);
 				}
-				else if (lb)
+				//for the click functions, lx and ly, are the positions of where the FIRST click happened.  x,y are current mouse position.
+				else if (lb)//lb means you are holding mouse down
 				{
-					if (lm == 1)
+					if (lm == 1)//line tool
 					{
 						xor_line(lx, ly, x, y, vid_buf);
 						if (c==WL_FAN+100 && lx>=0 && ly>=0 && lx<XRES && ly<YRES && bmap[ly/CELL][lx/CELL]==WL_FAN)
@@ -3375,14 +3415,14 @@ int main(int argc, char *argv[])
 									}
 						}
 					}
-					else if (lm == 2)
+					else if (lm == 2)//box tool
 					{
 						xor_line(lx, ly, lx, y, vid_buf);
 						xor_line(lx, y, x, y, vid_buf);
 						xor_line(x, y, x, ly, vid_buf);
 						xor_line(x, ly, lx, ly, vid_buf);
 					}
-					else
+					else//while mouse is held down, it draws lines between previous and current positions
 					{
 						if (c == PT_WIND)
 						{
@@ -3402,22 +3442,25 @@ int main(int argc, char *argv[])
 						ly = y;
 					}
 				}
-				else
+				else //it is the first click 
 				{
+					//start line tool
 					if ((sdl_mod & (KMOD_LSHIFT|KMOD_RSHIFT)) && !(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL|KMOD_LALT)))
 					{
 						lx = x;
 						ly = y;
 						lb = b;
-						lm = 1;
+						lm = 1;//line
 					}
+					//start box tool
 					else if ((sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)) && !(sdl_mod & (KMOD_LSHIFT|KMOD_RSHIFT)))
 					{
 						lx = x;
 						ly = y;
 						lb = b;
-						lm = 2;
+						lm = 2;//box
 					}
+					//flood fill
 					else if ((sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)) && (sdl_mod & (KMOD_LSHIFT|KMOD_RSHIFT)) && !(sdl_mod & (KMOD_LALT)))
 					{
 						if (sdl_mod & (KMOD_CAPS))
@@ -3431,6 +3474,7 @@ int main(int argc, char *argv[])
 						lb = 0;
 						lm = 0;
 					}
+					//sample
 					else if (((sdl_mod & (KMOD_LALT|KMOD_RALT)) && !(sdl_mod & (KMOD_SHIFT))) || b==SDL_BUTTON_MIDDLE)
 					{
 						if (y>0 && y<sdl_scale*YRES && x>0 && x<sdl_scale*XRES)
@@ -3451,7 +3495,7 @@ int main(int argc, char *argv[])
 						lb = 0;
 						lm = 0;
 					}
-					else
+					else //normal click, spawn element
 					{
 						//Copy state before drawing any particles (for undo)7
 						int cbx, cby, cbi;
@@ -3483,38 +3527,38 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			if (lb && lm)
+			if (lb && lm) //lm is box/line tool
 			{
 				x /= sdl_scale;
 				y /= sdl_scale;
 				c = (lb&1) ? sl : sr;
 				su = c;
-				if (lm == 1)
+				if (lm == 1)//line
 				{
 					if (c!=WL_FAN+100 || lx<0 || ly<0 || lx>=XRES || ly>=YRES || bmap[ly/CELL][lx/CELL]!=WL_FAN)
 						create_line(lx, ly, x, y, bsx, bsy, c);
 				}
-				else
+				else//box
 					create_box(lx, ly, x, y, c);
 				lm = 0;
 			}
 			lb = 0;
 		}
 
-		if (load_mode)
+		if (load_mode)//draw preview of stamp
 		{
 			draw_image(vid_buf, load_img, load_x, load_y, load_w, load_h, 128);
 			xor_rect(vid_buf, load_x, load_y, load_w, load_h);
 		}
 
-		if (save_mode)
+		if (save_mode)//draw dotted lines for selection
 		{
 			xor_rect(vid_buf, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL);
-			da = 51;
-			db = 269;
+			da = 51;//draws mouseover text for the message
+			db = 269;//the save message
 		}
 
-		if (zoom_en!=1 && !load_mode && !save_mode)
+		if (zoom_en!=1 && !load_mode && !save_mode)//draw normal cursor
 		{
 			render_cursor(vid_buf, mx/sdl_scale, my/sdl_scale, su, bsx, bsy);
 			mousex = mx/sdl_scale;
@@ -3525,7 +3569,7 @@ int main(int argc, char *argv[])
 			render_zoom(vid_buf);
 
 		if (da)
-			switch (db)
+			switch (db)//various mouseover messages, da is the alpha
 			{
 			case 256:
 				drawtext(vid_buf, 16, YRES-24, "Add simulation tags.", 255, 255, 255, da*5);
@@ -3590,12 +3634,12 @@ int main(int argc, char *argv[])
 			default:
 				drawtext(vid_buf, 16, YRES-24, (char *)ptypes[db].descs, 255, 255, 255, da*5);
 			}
-		if (itc)
+		if (itc)//message in the middle of the screen, such as view mode changes
 		{
 			itc--;
 			drawtext(vid_buf, (XRES-textwidth(itc_msg))/2, ((YRES/2)-10), itc_msg, 255, 255, 255, itc>51?255:itc*5);
 		}
-		if (it)
+		if (it)//intro message
 		{
 			it--;
 			drawtext(vid_buf, 16, 20, it_msg, 255, 255, 255, it>51?255:it*5);
@@ -3619,21 +3663,22 @@ int main(int argc, char *argv[])
 			drawrect(vid_buf, XRES-19-old_ver_len, YRES-22, old_ver_len+5, 13, 255, 216, 32, 255);
 		}
 
+		FPS++;
+		currentTime = SDL_GetTicks();
+		elapsedTime = currentTime-pastFPS;
+		if (elapsedTime>=1000)
+		{
+			FPSB = FPS;
+			FPS = 0;
+			pastFPS = currentTime;
+		}
+		else if (elapsedTime>20 && FPS*1000/elapsedTime>limitFPS)
+		{
+			SDL_Delay(5);
+		}
+
 		if (hud_enable)
 		{
-			currentTime = SDL_GetTicks();
-			if (currentTime-past>=16)
-			{
-				past = SDL_GetTicks();
-				FPS++;
-			}
-			if (currentTime-pastFPS>=1000)
-			{
-				FPSB = FPS;
-				FPS = 0;
-				pastFPS = currentTime;
-			}
-
 #ifdef BETA
 			sprintf(uitext, "Version %d Beta %d FPS:%d Parts:%d Generation:%d Gravity:%d Air:%d", SAVE_VERSION, MINOR_VERSION, FPSB, NUM_PARTS, GENERATION, gravityMode, airMode);
 #else
@@ -3788,11 +3833,14 @@ int main(int argc, char *argv[])
 	SDL_CloseAudio();
 	http_done();
 	
+#ifdef PYCONSOLE
+	
     PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.py'))\nexcept:\n    pass");
     PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.pyo'))\nexcept:\n    pass");
     PyRun_SimpleString("import os,tempfile,os.path\ntry:\n    os.remove(os.path.join(tempfile.gettempdir(),'tpt_console.pyc'))\nexcept:\n    pass");
     
     Py_Finalize();//cleanup any python stuff.
+#endif
 	return 0;
 }
 #ifdef PYCONSOLE
@@ -3813,7 +3861,7 @@ int process_command(pixel *vid_buf,char *console,char *console_error,PyObject *p
 		if(strcmp(console2, "quit")==0)
 		{
 			return -1;
-		} else {
+		}else {
 			//handle them command
 			pargs=Py_BuildValue("(s)",console);
 			pvalue = PyObject_CallObject(pfunc, pargs);
@@ -3829,13 +3877,14 @@ int process_command(pixel *vid_buf,char *console,char *console_error,PyObject *p
 #endif
 int process_command_old(pixel *vid_buf,char *console,char *console_error) {
     int y,x,nx,ny,i,j,k,m;
+    float f;
     int do_next = 1;
-    char xcoord[10];
-    char ycoord[10];
-    char console2[15];
-    char console3[15];
-    char console4[15];
-    char console5[15];
+    char xcoord[10] = "";
+    char ycoord[10] = "";
+    char console2[15] = "";
+    char console3[15] = "";
+    char console4[15] = "";
+    char console5[15] = "";
     //sprintf(console_error, "%s", console);
     if(console && strcmp(console, "")!=0 && strncmp(console, " ", 1)!=0)
     {
@@ -3844,7 +3893,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
         {
             return -1;
         }
-        else if(strcmp(console2, "file")==0 && console3)
+        else if(strcmp(console2, "file")==0 && console3[0])
         {
             if(file_script){
                 FILE *f=fopen(console3, "r");
@@ -3858,7 +3907,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                     ny = 0;
                     j = 0;
                     m = 0;
-                    if(console4)
+                    if(console4[0])
                         console_parse_coords(console4, &nx , &ny, console_error);
                     memset(pch,0,sizeof(pch));
                     memset(fileread,0,sizeof(fileread));
@@ -3934,7 +3983,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
             }
 
         }
-        else if(strcmp(console2, "sound")==0 && console3)
+        else if(strcmp(console2, "sound")==0 && console3[0])
         {
             if (sound_enable) play_sound(console3);
             else strcpy(console_error, "Audio device not available - cannot play sounds");
@@ -3944,7 +3993,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                 pyready=1;
             else
                 strcpy(console_error, "python not ready. check stdout for more info.");
-        else if(strcmp(console2, "load")==0 && console3)
+        else if(strcmp(console2, "load")==0 && console3[0])
         {
             j = atoi(console3);
             if(j)
@@ -3953,7 +4002,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                 console_mode = 0;
             }
         }
-        else if(strcmp(console2, "if")==0 && console3)
+        else if(strcmp(console2, "if")==0 && console3[0])
         {
             if(strcmp(console3, "type")==0)//TODO: add more than just type, and be able to check greater/less than
             {
@@ -3969,7 +4018,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                     return 0;
             }
         }
-        else if (strcmp(console2, "create")==0 && console3 && console4)
+        else if (strcmp(console2, "create")==0 && console3[0] && console4[0])
         {
             if (console_parse_type(console3, &j, console_error)
                     && console_parse_coords(console4, &nx, &ny, console_error))
@@ -3980,12 +4029,12 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                     strcpy(console_error, "Could not create particle");
             }
         }
-        else if ((strcmp(console2, "delete")==0 || strcmp(console2, "kill")==0) && console3)
+        else if ((strcmp(console2, "delete")==0 || strcmp(console2, "kill")==0) && console3[0])
         {
             if (console_parse_partref(console3, &i, console_error))
                 kill_part(i);
         }
-        else if(strcmp(console2, "reset")==0 && console3)
+        else if(strcmp(console2, "reset")==0 && console3[0])
         {
             if(strcmp(console3, "pressure")==0)
             {
@@ -4026,7 +4075,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
                 }
             }
         }
-        else if(strcmp(console2, "set")==0 && console3 && console4 && console5)
+        else if(strcmp(console2, "set")==0 && console3[0] && console4[0] && console5[0])
         {
             if(strcmp(console3, "life")==0)
             {
@@ -4090,28 +4139,28 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
             {
                 if(strcmp(console4, "all")==0)
                 {
-                    j = atoi(console5);
+                    f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type)
-                            parts[i].temp = j;
+                            parts[i].temp = f;
                     }
                 }
                 else if (console_parse_type(console4, &j, console_error))
                 {
-                    k = atoi(console5);
+                    f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type == j)
-                            parts[i].temp= k;
+                            parts[i].temp= f;
                     }
                 }
                 else
                 {
                     if (console_parse_partref(console4, &i, console_error))
                     {
-                        j = atoi(console5);
-                        parts[i].temp = j;
+                        f = atof(console5);
+                        parts[i].temp = f;
                     }
                 }
             }
@@ -4235,28 +4284,28 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
             {
                 if(strcmp(console4, "all")==0)
                 {
-                    j = atoi(console5);
+                    f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type)
-                            parts[i].vx = j;
+                            parts[i].vx = f;
                     }
                 }
                 else if (console_parse_type(console4, &j, console_error))
                 {
-                    k = atoi(console5);
+					f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type == j)
-                            parts[i].vx = k;
+                            parts[i].vx = f;
                     }
                 }
                 else
                 {
                     if (console_parse_partref(console4, &i, console_error))
                     {
-                        j = atoi(console5);
-                        parts[i].vx = j;
+                        f = atof(console5);
+                        parts[i].vx = f;
                     }
                 }
             }
@@ -4264,34 +4313,34 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
             {
                 if(strcmp(console4, "all")==0)
                 {
-                    j = atoi(console5);
+					f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type)
-                            parts[i].vy = j;
+                            parts[i].vy = f;
                     }
                 }
                 else if (console_parse_type(console4, &j, console_error))
                 {
-                    k = atoi(console5);
+                    f = atof(console5);
                     for(i=0; i<NPART; i++)
                     {
                         if(parts[i].type == j)
-                            parts[i].vy = k;
+                            parts[i].vy = f;
                     }
                 }
                 else
                 {
                     if (console_parse_partref(console4, &i, console_error))
                     {
-                        j = atoi(console5);
-                        parts[i].vy = j;
+                        f = atof(console5);
+                        parts[i].vy = f;
                     }
                 }
             }
         }
         else
-            sprintf(console_error, "Invalid Command", console2);
+            strcpy(console_error, "Invalid Command");
     }
     return 1;
 }

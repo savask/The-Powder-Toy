@@ -3,11 +3,22 @@
 #include <string.h>
 #include <regex.h>
 #include <sys/types.h>
+#ifdef WIN32
+#include <windows.h>
+#include "update.h"
+#endif
+#ifdef MACOSX
+///#include <Pasteboard.h>
+#include <ApplicationServices/ApplicationServices.h>
+#endif
 #include "misc.h"
 #include "defines.h"
 #include "interface.h"
 #include "graphics.h"
 #include "powder.h"
+#if defined WIN32
+#include <windows.h>
+#endif
 
 //Signum function
 #if defined(WIN32) && !defined(__GNUC__)
@@ -371,7 +382,18 @@ vector2d v2d_new(float x, float y)
 
 void clipboard_push_text(char * text)
 {
+#ifdef MACOSX
+	PasteboardRef newclipboard; 
+	
+	if(PasteboardCreate(kPasteboardClipboard, &newclipboard)!=noErr) return;
+	if(PasteboardClear(newclipboard)!=noErr) return;
+	PasteboardSynchronize(newclipboard);
+	
+	CFDataRef data = CFDataCreate(kCFAllocatorDefault, text, strlen(text));
+	PasteboardPutItemFlavor(newclipboard, (PasteboardItemID)1, CFSTR("com.apple.traditional-mac-plain-text"), data, 0);	
+#else 
 	printf("Not implemented: put text on clipboard \"%s\"\n", text);
+#endif
 }
 
 char * clipboard_pull_text()
@@ -382,17 +404,19 @@ char * clipboard_pull_text()
 
 int register_extension()
 {
+#if defined INSTALLABLE
 #if defined WIN32
-	
 	LONG rresult;
 	HKEY newkey;
-	char *currentfilename;
+	char currentfilename[MAX_PATH] = "";
 	char *iconname;
 	char *opencommand;
-	currentfilename = exe_name();
-	iconname = malloc(strlen(currentfilename)+3);
+	if (!GetModuleFileName(NULL, currentfilename, MAX_PATH))
+		return 0;
+	currentfilename[MAX_PATH-1] = 0;
+	iconname = malloc(strlen(currentfilename)+6);
 	opencommand = malloc(strlen(currentfilename)+13);
-	sprintf(iconname, "%s,1", currentfilename);
+	sprintf(iconname, "%s,-101", currentfilename);
 	sprintf(opencommand, "\"%s\" open:\"%%1\"", currentfilename);
 	
 	//Create extension entry
@@ -449,6 +473,9 @@ int register_extension()
 #elif defined LIN64
 	return 0;
 #elif defined MACOSX
+	return 0;
+#endif
+#else
 	return 0;
 #endif
 }
