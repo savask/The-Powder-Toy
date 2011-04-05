@@ -446,7 +446,7 @@ void ui_checkbox_draw(pixel *vid_buf, ui_checkbox *ed)
 void ui_checkbox_process(int mx, int my, int mb, int mbq, ui_checkbox *ed)
 {
 	int w = 12;
-
+	
 	if (mb && !mbq)
 	{
 		if (mx>=ed->x && mx<=ed->x+w && my>=ed->y && my<=ed->y+w)
@@ -464,6 +464,41 @@ void ui_checkbox_process(int mx, int my, int mb, int mbq, ui_checkbox *ed)
 		{
 			ed->focus = 0;
 		}
+	}
+}
+
+void ui_copytext_draw(pixel *vid_buf, ui_copytext *ed)
+{
+	int g = 180, i = 0;
+	if(!ed->state){
+		if(ed->hover){
+			i = 0;
+		} else {
+			i = 100;
+		}
+		g = 255;
+		drawtext(vid_buf, (ed->x+(ed->width/2))-(textwidth("Click the box to copy the text")/2), ed->y-12, "Click the box to copy the text", 255, 255, 255, 255-i);
+	} else {
+		i = 0;
+		drawtext(vid_buf, (ed->x+(ed->width/2))-(textwidth("Copied!")/2), ed->y-12, "Copied!", 255, 255, 255, 255-i);
+		g = 190;
+	}
+	
+	drawrect(vid_buf, ed->x, ed->y, ed->width, ed->height, g, 255, g, 255-i);
+	drawrect(vid_buf, ed->x+1, ed->y+1, ed->width-2, ed->height-2, g, 255, g, 100-i);
+	drawtext(vid_buf, ed->x+6, ed->y+5, ed->text, g, 255, g, 230-i);
+}
+
+void ui_copytext_process(int mx, int my, int mb, int mbq, ui_copytext *ed)
+{
+	if(my>=ed->y && my<=ed->y+ed->height && mx>=ed->x && mx<=ed->x+ed->width && !ed->state){
+		if(mb && !mbq){
+			clipboard_push_text(ed->text);
+			ed->state = 1;
+		}
+		ed->hover = 1;
+	} else {
+		ed->hover = 0;
 	}
 }
 
@@ -738,6 +773,20 @@ void copytext_ui(pixel *vid_buf, char *top, char *txt, char *copytxt)
 	int buttony = 0;
 	int buttonwidth = 0;
 	int buttonheight = 0;
+	ui_copytext ed;
+	
+	buttonwidth = textwidth(copytxt)+12;
+	buttonheight = 10+8;
+	buttony = y0+50;
+	buttonx = x0+(xsize/2)-(buttonwidth/2);
+	
+	ed.x = buttonx;
+	ed.y = buttony;
+	ed.width = buttonwidth;
+	ed.height = buttonheight;
+	ed.hover = 0;
+	ed.state = 0;
+	strcpy(ed.text, copytxt);
 	
 	while (!sdl_poll())
 	{
@@ -753,40 +802,13 @@ void copytext_ui(pixel *vid_buf, char *top, char *txt, char *copytxt)
 		mx /= sdl_scale;
 		my /= sdl_scale;
 		
-		buttonwidth = textwidth(copytxt)+12;
-		buttonheight = 10+8;
-		buttony = y0+50;
-		buttonx = x0+(xsize/2)-(buttonwidth/2);
-		
-		clearrect(vid_buf, x0-2, y0-2, xsize, ysize);
+		clearrect(vid_buf, x0-2, y0-2, xsize+4, ysize+4);
 		drawrect(vid_buf, x0, y0, xsize, ysize, 192, 192, 192, 255);
 		drawtext(vid_buf, x0+8, y0+8, top, 160, 160, 255, 255);
 		drawtext(vid_buf, x0+8, y0+26, txt, 255, 255, 255, 255);
 		
-		if(my>=buttony && my<=buttony+buttonheight && mx>=buttonx && mx<=buttonx+buttonwidth && !state){
-			if(b && !bq){
-				clipboard_push_text(copytxt);
-				state = 1;
-				g = 210;
-			}
-			i = 0;
-		} else {
-			if(state==1){
-				i = 0;
-			} else {
-				i = 100;
-			}
-		}
-		
-		if(!state){
-			drawtext(vid_buf, (x0+(xsize/2))-(textwidth("Click the box to copy the text")/2), y0+38, "Click the box to copy the text", 255, 255, 255, 255-i);
-		} else {
-			drawtext(vid_buf, (x0+(xsize/2))-(textwidth("Copied!")/2), y0+38, "Copied!", 255, 255, 255, 255-i);
-		}
-		
-		drawrect(vid_buf, buttonx, buttony, buttonwidth, buttonheight, g, 255, g, 255-i);
-		drawrect(vid_buf, buttonx+1, buttony+1, buttonwidth-2, buttonheight-2, g, 255, g, 100-i);
-		drawtext(vid_buf, buttonx+6, buttony+5, copytxt, g, 255, g, 230-i);
+		ui_copytext_draw(vid_buf, &ed);
+		ui_copytext_process(mx, my, b, bq, &ed);
 		
 		drawtext(vid_buf, x0+5, y0+ysize-11, "OK", 255, 255, 255, 255);
 		drawrect(vid_buf, x0, y0+ysize-16, xsize, 16, 192, 192, 192, 255);
@@ -1307,10 +1329,11 @@ int save_name_ui(pixel *vid_buf)
 {
 	int x0=(XRES-420)/2,y0=(YRES-68-YRES/4)/2,b=1,bq,mx,my,ths,idtxtwidth,nd=0;
 	void *th;
-	char *save_id_text;
+	pixel *old_vid=(pixel *)calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	ui_edit ed;
 	ui_edit ed2;
 	ui_checkbox cb;
+	ui_copytext ctb;
 
 	th = build_thumb(&ths, 0);
 
@@ -1344,9 +1367,14 @@ int save_name_ui(pixel *vid_buf)
 	ed2.multiline = 1;
 	strcpy(ed2.str, svf_description);
 	
-	save_id_text = malloc(strlen("Current save id: ")+strlen(svf_id)+1);
-	sprintf(save_id_text,"Current save id: %s",svf_id);
-	idtxtwidth = textwidth(save_id_text);
+	ctb.x = 0;
+	ctb.y = YRES+MENUSIZE-20;
+	ctb.width = textwidth(svf_id)+12;
+	ctb.height = 10+7;
+	ctb.hover = 0;
+	ctb.state = 0;
+	strcpy(ctb.text, svf_id);
+	
 
 	cb.x = x0+10;
 	cb.y = y0+53+YRES/4;
@@ -1354,6 +1382,8 @@ int save_name_ui(pixel *vid_buf)
 	cb.checked = svf_publish;
 
 	fillrect(vid_buf, -1, -1, XRES+BARSIZE, YRES+MENUSIZE, 0, 0, 0, 192);
+	memcpy(old_vid, vid_buf, ((XRES+BARSIZE)*(YRES+MENUSIZE))*PIXELSIZE);
+	
 	while (!sdl_poll())
 	{
 		bq = b;
@@ -1385,11 +1415,19 @@ int save_name_ui(pixel *vid_buf)
 		
 		if (svf_id[0])
 		{
-			fillrect(vid_buf, (XRES+BARSIZE-idtxtwidth)/2-5, YRES+(MENUSIZE-16), idtxtwidth+10, 14, 0, 0, 0, 255);
-			drawtext(vid_buf, (XRES+BARSIZE-idtxtwidth)/2, YRES+MENUSIZE-12, save_id_text, 255, 255, 255, 255);
+			//Save ID text and copybox
+			idtxtwidth = textwidth("Current save ID: ");
+			idtxtwidth += ctb.width;
+			ctb.x = textwidth("Current save ID: ")+(XRES+BARSIZE-idtxtwidth)/2;
+			drawtext(vid_buf, (XRES+BARSIZE-idtxtwidth)/2, YRES+MENUSIZE-15, "Current save ID: ", 255, 255, 255, 255);
+			
+			ui_copytext_draw(vid_buf, &ctb);
+			ui_copytext_process(mx, my, b, bq, &ctb);
 		}
 
 		sdl_blit(0, 0, (XRES+BARSIZE), YRES+MENUSIZE, vid_buf, (XRES+BARSIZE));
+		
+		memcpy(vid_buf, old_vid, ((XRES+BARSIZE)*(YRES+MENUSIZE))*PIXELSIZE);
 
 		ui_edit_process(mx, my, b, &ed);
 		ui_edit_process(mx, my, b, &ed2);
@@ -1445,7 +1483,6 @@ int save_name_ui(pixel *vid_buf)
 		}
 	}
 	free(th);
-	if (save_id_text) free(save_id_text);
 	return 0;
 }
 
@@ -2605,7 +2642,6 @@ int search_ui(pixel *vid_buf)
 			last_page = search_page;
 			last_fav = search_fav;
 			active = 1;
-			// TODO: Create a better fix for this bug
 			uri = malloc(strlen(last)*3+180+strlen(SERVER)+strlen(svf_user)+20); //Increase "padding" from 80 to 180 to fix the search memory corruption bug
 			if (search_own || svf_admin || svf_mod)
 				tmp = "&ShowVotes=true";
@@ -2847,7 +2883,7 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	int nyd,nyu,ry,lv;
 	float ryf;
 
-	char *uri, *uri_2, *o_uri, *save_id_text;
+	char *uri, *uri_2, *o_uri;
 	void *data, *info_data;
 	save_info *info = malloc(sizeof(save_info));
 	void *http = NULL, *http_2 = NULL;
@@ -2856,6 +2892,7 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	time_t http_last_use = HTTP_TIMEOUT,  http_last_use_2 = HTTP_TIMEOUT;
 	pixel *save_pic;// = malloc((XRES/2)*(YRES/2));
 	ui_edit ed;
+	ui_copytext ctb;
 
 	pixel *old_vid=(pixel *)calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	fillrect(vid_buf, -1, -1, XRES+BARSIZE, YRES+MENUSIZE, 0, 0, 0, 192);
@@ -2865,9 +2902,6 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	drawrect(vid_buf, 50, 50, (XRES/2)+1, (YRES/2)+1, 255, 255, 255, 155);
 	drawrect(vid_buf, 50+(XRES/2)+1, 50, XRES+BARSIZE-100-((XRES/2)+1), YRES+MENUSIZE-100, 155, 155, 155, 255);
 	drawtext(vid_buf, 50+(XRES/4)-textwidth("Loading...")/2, 50+(YRES/4), "Loading...", 255, 255, 255, 128);
-	
-	save_id_text = malloc(strlen("Save id: ")+strlen(save_id)+1);
-	sprintf(save_id_text,"Save id: %s",save_id);
 
 	ed.x = 57+(XRES/2)+1;
 	ed.y = YRES+MENUSIZE-118;
@@ -2880,6 +2914,14 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	ed.multiline = 1;
 	ed.cursor = 0;
 	strcpy(ed.str, "");
+	
+	ctb.x = 100;
+	ctb.y = YRES+MENUSIZE-20;
+	ctb.width = textwidth(save_id)+12;
+	ctb.height = 10+7;
+	ctb.hover = 0;
+	ctb.state = 0;
+	strcpy(ctb.text, save_id);
 
 	memcpy(old_vid, vid_buf, ((XRES+BARSIZE)*(YRES+MENUSIZE))*PIXELSIZE);
 
@@ -2918,8 +2960,6 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	http_2 = http_async_req_start(http_2, uri_2, NULL, 0, 1);
 	if (svf_login)
 	{
-		//http_auth_headers(http, svf_user, svf_pass);
-		//http_auth_headers(http_2, svf_user, svf_pass);
 		http_auth_headers(http, svf_user_id, NULL, svf_session_id);
 		http_auth_headers(http_2, svf_user_id, NULL, svf_session_id);
 	}
@@ -3059,9 +3099,14 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 			drawtext(vid_buf, XRES+BARSIZE-90, YRES+MENUSIZE-63, "Submit", 255, 255, 255, 255);
 		}
 		
-		cix = textwidth(save_id_text);
-		fillrect(vid_buf, (XRES+BARSIZE-cix)/2-5, YRES+(MENUSIZE-16), cix+10, 14, 0, 0, 0, 255);
-		drawtext(vid_buf, (XRES+BARSIZE-cix)/2, YRES+MENUSIZE-12, save_id_text, 255, 255, 255, 255);
+		//Save ID text and copybox
+		cix = textwidth("Save ID: ");
+		cix += ctb.width;
+		ctb.x = textwidth("Save ID: ")+(XRES+BARSIZE-cix)/2;
+		//ctb.x = 
+		drawtext(vid_buf, (XRES+BARSIZE-cix)/2, YRES+MENUSIZE-15, "Save ID: ", 255, 255, 255, 255);
+		ui_copytext_draw(vid_buf, &ctb);
+		ui_copytext_process(mx, my, b, bq, &ctb);
 
 		//Open Button
 		bc = openable?255:150;
@@ -3152,7 +3197,6 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 			fillrect(vid_buf, 250, YRES+MENUSIZE-68, 107, 18, 255, 255, 255, 40);
 			if (b && !bq) {
 				//Button Clicked
-				//TODO: Open link
 				o_uri = malloc(7+strlen(SERVER)+41+strlen(save_id)*3);
 				strcpy(o_uri, "http://" SERVER "/Browse/View.html?ID=");
 				strcaturl(o_uri, save_id);
@@ -3171,11 +3215,13 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 				ed.str[0] = 0;
 			}
 		}
-		if (!(mx>50 && my>50 && mx<XRES+BARSIZE-50 && my<YRES+MENUSIZE-50) && b && !queue_open) {
+		//If mouse was clicked outsite of the window bounds.
+		if (!(mx>50 && my>50 && mx<XRES+BARSIZE-50 && my<YRES+MENUSIZE-50) && b && !queue_open && my<YRES+MENUSIZE-21) {
 			retval = 0;
 			break;
 		}
 
+		//User opened the save, wait until we've got all the data first...
 		if (queue_open) {
 			if (info_ready && data_ready) {
 				// Do Open!
@@ -3248,7 +3294,6 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 		if (!b)
 			break;
 	}
-	if (save_id_text) free(save_id_text);
 	//Close open connections
 	if (http)
 		http_async_req_close(http);
