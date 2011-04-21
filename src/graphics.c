@@ -2523,7 +2523,7 @@ void draw_parts(pixel *vid)
 				}
 				else if (t==PT_LCRY)
 				{
-					uint8 GR = 0x50+(parts[i].life*10);
+					uint8 GR = 0x50+((parts[i].life>10?10:parts[i].life)*10);
 					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(GR, GR, GR);
 					if (cmode == CM_BLOB) {
 						blendpixel(vid, nx+1, ny, GR, GR, GR, 223);
@@ -2539,7 +2539,7 @@ void draw_parts(pixel *vid)
 				}
 				else if (t==PT_PCLN)
 				{
-					uint8 GR = 0x3B+(parts[i].life*19);
+					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
 					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(GR, GR, 10);
 					if (cmode == CM_BLOB) {
 						blendpixel(vid, nx+1, ny, GR, GR, 10, 223);
@@ -2555,7 +2555,7 @@ void draw_parts(pixel *vid)
 				}
 				else if (t==PT_HSWC)
 				{
-					uint8 GR = 0x3B+(parts[i].life*19);
+					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
 					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(GR, 10, 10);
 					if (cmode == CM_BLOB) {
 						blendpixel(vid, nx+1, ny, GR, 10, 10, 223);
@@ -2571,7 +2571,7 @@ void draw_parts(pixel *vid)
 				}
 				else if (t==PT_PUMP)
 				{
-					uint8 GR = 0x3B+(parts[i].life*19);
+					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
 					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(10, 10, GR);
 					if (cmode == CM_BLOB) {
 						blendpixel(vid, nx+1, ny, 10, 10, GR, 223);

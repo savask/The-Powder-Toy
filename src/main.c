@@ -153,7 +153,8 @@ static const char *it_msg =
     "'P' will take a screenshot and save it into the current directory.\n"
     "\n"
     "\bgCopyright (c) 2008-11 Stanislaw K Skowronek (\brhttp://powder.unaligned.org\bg, \bbirc.unaligned.org #wtf\bg)\n"
-    "\bgCopyright (c) 2010-11 Simon Robertshaw, Skresanov Savely, cracker64, Bryan Hoyle, Nathan Cousins, jacksonmj, Lieuwe Mosch\n"
+    "\bgCopyright (c) 2010-11 Simon Robertshaw, Skresanov Savely, cracker64, Bryan Hoyle, Nathan Cousins, jacksonmj,\n"
+	"                      Lieuwe Mosch\n"
     "\n"
     "\bgTo use online features such as saving, you need to register at: \brhttp://powdertoy.co.uk/Register.html"
     ;
@@ -178,6 +179,7 @@ int death = 0, framerender = 0;
 int amd = 1;
 int FPSB = 0;
 int MSIGN =-1;
+int frameidx = 0;
 //int CGOL = 0;
 //int GSPEED = 1;//causes my .exe to crash..
 int sound_enable = 0;
@@ -475,9 +477,11 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 	{
 		free(d);
 		free(c);
+		free(m);
 		return NULL;
 	}
 	free(d);
+	free(m);
 
 	*size = i+12;
 	return c;
@@ -485,8 +489,8 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 
 int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr, unsigned pmap[YRES][XRES])
 {
-	unsigned char *d,*c=save;
-	int q,i,j,k,x,y,p=0,*m=calloc(XRES*YRES, sizeof(int)), ver, pty, ty, legacy_beta=0;
+	unsigned char *d=NULL,*c=save;
+	int q,i,j,k,x,y,p=0,*m=NULL, ver, pty, ty, legacy_beta=0;
 	int bx0=x0/CELL, by0=y0/CELL, bw, bh, w, h;
 	int fp[NPART], nf=0, new_format = 0, ttv = 0;
 	particle *parts = partsptr;
@@ -571,6 +575,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		}
 		clear_sim();
 	}
+	m = calloc(XRES*YRES, sizeof(int));
 
 	// make a catalog of free parts
 	memset(pmap, 0, sizeof(pmap));
@@ -895,11 +900,14 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 	}
 
 version1:
-	free(d);
+	if (m) free(m);
+	if (d) free(d);
 
 	return 0;
 
 corrupt:
+	if (m) free(m);
+	if (d) free(d);
 	if (replace)
 	{
 		legacy_enable = 0;
@@ -2551,6 +2559,68 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
 	return 1;
 }
 
+#ifdef RENDERER
+int main(int argc, char *argv[])
+{
+	pixel *vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
+	int load_size, i=0, j=0;
+	void *load_data = file_load(argv[1], &load_size);
+	unsigned char c[3];
+	FILE *f;
+	
+	cmode = CM_FIRE;
+	sys_pause = 1;
+	parts = calloc(sizeof(particle), NPART);
+	for (i=0; i<NPART-1; i++)
+		parts[i].life = i+1;
+	parts[NPART-1].life = -1;
+	pfree = 0;
+	
+	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
+	fire_bg = calloc(XRES*YRES, PIXELSIZE);
+	
+	prepare_alpha();
+	
+	if(load_data && load_size){
+		int parsestate = 0;
+		//parsestate = parse_save(load_data, load_size, 1, 0, 0);
+		parsestate = parse_save(load_data, load_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
+		
+		for(i=0; i<30; i++){
+			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
+			update_particles(vid_buf);
+			draw_parts(vid_buf);
+			render_fire(vid_buf);
+		}
+		
+		render_signs(vid_buf);
+		
+		if(parsestate>0){
+			//return 0;
+			info_box(vid_buf, "Save file invalid or from newer version");
+		}
+		
+		f=fopen(argv[2],"wb");
+		fprintf(f,"P6\n%d %d\n255\n",XRES,YRES);
+		for (j=0; j<YRES; j++)
+		{
+			for (i=0; i<XRES; i++)
+			{
+				c[0] = PIXR(vid_buf[i]);
+				c[1] = PIXG(vid_buf[i]);
+				c[2] = PIXB(vid_buf[i]);
+				fwrite(c,3,1,f);
+			}
+			vid_buf+=XRES+BARSIZE;
+		}
+		fclose(f);
+		
+		return 1;
+	}
+	
+	return 0;
+}
+#else
 int main(int argc, char *argv[])
 {
 	int hud_enable = 1;
@@ -2576,7 +2646,7 @@ int main(int argc, char *argv[])
 #endif
 	int wavelength_gfx = 0;
 	int x, y, b = 0, sl=1, sr=0, su=0, c, lb = 0, lx = 0, ly = 0, lm = 0;//, tx, ty;
-	int da = 0, db = 0, it = 2047, mx, my, bsx = 2, bsy = 2;
+	int da = 0, dae = 0, db = 0, it = 2047, mx, my, bsx = 2, bsy = 2;
 	float nfvx, nfvy;
 	int load_mode=0, load_w=0, load_h=0, load_x=0, load_y=0, load_size=0;
 	void *load_data=NULL;
@@ -2776,6 +2846,8 @@ int main(int argc, char *argv[])
 
 	while (!sdl_poll()) //the main loop
 	{
+		frameidx++;
+		frameidx %= 30;
 		if (!sys_pause||framerender) //only update air if not paused
 		{
 			update_air();
@@ -2807,7 +2879,7 @@ int main(int argc, char *argv[])
 			bsy = 1180;
 		if (bsy<0)
 			bsy = 0;
-
+		
 		update_particles(vid_buf); //update everything
 		draw_parts(vid_buf); //draw particles
 
@@ -3176,6 +3248,16 @@ int main(int argc, char *argv[])
 				else
 					GRID_MODE = (GRID_MODE+1)%10;
 			}
+			if (sdl_key=='m')
+			{
+				if(sl!=sr)
+				{
+					sl ^= sr;
+					sr ^= sl;
+					sl ^= sr;
+				}
+				dae = 51;
+			}
 			if (sdl_key=='=')
 			{
 				int nx, ny;
@@ -3450,7 +3532,7 @@ int main(int argc, char *argv[])
 				active_menu = i;
 			}
 		}
-		menu_ui_v3(vid_buf, active_menu, &sl, &sr, b, bq, x, y); //draw the elements in the current menu
+		menu_ui_v3(vid_buf, active_menu, &sl, &sr, &dae, b, bq, x, y); //draw the elements in the current menu
 
 		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy //change mouse position while it is in a zoom window
 		        && x<sdl_scale*(zoom_wx+ZFACTOR*ZSIZE)
@@ -3646,6 +3728,9 @@ int main(int argc, char *argv[])
 		else if (da > 0)//fade away mouseover text
 			da --;
 
+		if (dae > 0) //Fade away selected elements
+			dae --;
+		
 		if (!sdl_zoom_trig && zoom_en==1)
 			zoom_en = 0;
 
@@ -4357,3 +4442,4 @@ int main(int argc, char *argv[])
 #endif
 	return 0;
 }
+#endif
