@@ -2110,41 +2110,43 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
 		else if (strcmp(console2, "file")==0 && console3[0])
 		{
 			if (file_script) {
-				FILE *f=fopen(console3, "r");
-				if (f)
+				int filesize;
+				char *fileread = file_load(console3, &filesize);
+				nx = 0;
+				ny = 0;
+				if (console4[0] && !console_parse_coords(console4, &nx , &ny, console_error))
 				{
-					char fileread[5000];//TODO: make this change with file size
-					char pch[5000];
-					char tokens[10];
+					free(fileread);
+					return 1;
+				}
+				if (fileread)
+				{
+					char pch[501];
+					char tokens[31];
 					int tokensize;
-					nx = 0;
-					ny = 0;
-					j = 0;
-					m = 0;
-					if (console4[0])
-						console_parse_coords(console4, &nx , &ny, console_error);
+					j = 0; // line start position in fileread
+					m = 0; // token start position in fileread
 					memset(pch,0,sizeof(pch));
-					memset(fileread,0,sizeof(fileread));
-					fread(fileread,1,5000,f);
-					for (i=0; i<strlen(fileread); i++)
+					for (i=0; i<filesize; i++)
 					{
-						if (fileread[i] != '\n')
+						if (fileread[i] != '\n' && i-m<30)
 						{
 							pch[i-j] = fileread[i];
 							if (fileread[i] != ' ')
 								tokens[i-m] = fileread[i];
 						}
-						if (fileread[i] == ' ' || fileread[i] == '\n')
+						if ((fileread[i] == ' ' || fileread[i] == '\n') && i-j<400)
 						{
-							if (sregexp(tokens,"^x.[0-9],y.[0-9]")==0)//TODO: fix regex matching to work with x,y ect, right now it has to have a +0 or -0
+							if (sregexp(tokens,"^x.\\{0,1\\}[0-9]*,y.\\{0,1\\}[0-9]*")==0)
 							{
-								char temp[5];
 								int starty = 0;
 								tokensize = strlen(tokens);
 								x = 0;
 								y = 0;
-								sscanf(tokens,"x%d,y%d",&x,&y);
-								sscanf(tokens,"%9s,%9s",xcoord,ycoord);
+								if (tokens[1]!=',')
+									sscanf(tokens,"x%d,y%d",&x,&y);
+								else
+									sscanf(tokens,"x,y%d",&y);
 								x += nx;
 								y += ny;
 								sprintf(xcoord,"%d",x);
@@ -2159,7 +2161,6 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
 								for (k=0; k<strlen(ycoord); k++)
 								{
 									pch[i-j-tokensize+starty+k] = ycoord[k];
-									
 								}
 								pch[i-j-tokensize +strlen(xcoord) +1 +strlen(ycoord)] = ' ';
 								j = j -tokensize +strlen(xcoord) +1 +strlen(ycoord);
@@ -2183,8 +2184,7 @@ int process_command_old(pixel *vid_buf,char *console,char *console_error) {
 							j = i+1;
 						}
 					}
-					//sprintf(console_error, "%s exists", console3);
-					fclose(f);
+					free(fileread);
 				}
 				else
 				{
@@ -2658,6 +2658,7 @@ int main(int argc, char *argv[])
 	PyObject *pname,*pmodule,*pfunc,*pvalue,*pargs,*pstep,*pkey;
 	PyObject *tpt_console_obj;
 #endif
+	pixel *decorations = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	GSPEED = 1;
@@ -2869,8 +2870,9 @@ int main(int argc, char *argv[])
 			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 		}
 #endif
+		draw_grav(vid_buf);
 
-		//Can't be too sure...
+		//Can't be too sure (Limit the cursor size)
 		if (bsx>1180)
 			bsx = 1180;
 		if (bsx<0)
@@ -2881,6 +2883,7 @@ int main(int argc, char *argv[])
 			bsy = 0;
 		
 		update_particles(vid_buf); //update everything
+		update_grav();
 		draw_parts(vid_buf); //draw particles
 
 		if (cmode==CM_PERS)
@@ -3241,6 +3244,8 @@ int main(int argc, char *argv[])
 				console_mode = !console_mode;
 				//hud_enable = !console_mode;
 			}
+			if (sdl_key=='b')
+				decorations_ui(vid_buf,decorations,&bsx,&bsy);//decoration_mode = !decoration_mode;
 			if (sdl_key=='g')
 			{
 				if (sdl_mod & (KMOD_SHIFT))
@@ -3533,7 +3538,7 @@ int main(int argc, char *argv[])
 			}
 		}
 		menu_ui_v3(vid_buf, active_menu, &sl, &sr, &dae, b, bq, x, y); //draw the elements in the current menu
-
+		draw_decorations(vid_buf,decorations);
 		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy //change mouse position while it is in a zoom window
 		        && x<sdl_scale*(zoom_wx+ZFACTOR*ZSIZE)
 		        && y<sdl_scale*(zoom_wy+ZFACTOR*ZSIZE))
@@ -3577,7 +3582,7 @@ int main(int argc, char *argv[])
 				sprintf(heattext, "Empty, Pressure: %3.2f", pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL]);
 				if (DEBUG_MODE)
 				{
-					sprintf(coordtext, "X:%d Y:%d", x/sdl_scale, y/sdl_scale);
+					sprintf(coordtext, "X:%d Y:%d. GX: %.2f GY: %.2f", x/sdl_scale, y/sdl_scale, gravx[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], gravy[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL]);
 				}
 			}
 		}
@@ -4265,15 +4270,20 @@ int main(int argc, char *argv[])
 		FPS++;
 		currentTime = SDL_GetTicks();
 		elapsedTime = currentTime-pastFPS;
+		if ((FPS>2 || elapsedTime>1000*2/limitFPS) && elapsedTime && FPS*1000/elapsedTime>limitFPS)
+		{
+			while (FPS*1000/elapsedTime>limitFPS)
+			{
+				SDL_Delay(1);
+				currentTime = SDL_GetTicks();
+				elapsedTime = currentTime-pastFPS;
+			}
+		}
 		if (elapsedTime>=1000)
 		{
 			FPSB = FPS;
 			FPS = 0;
 			pastFPS = currentTime;
-		}
-		else if (elapsedTime>20 && FPS*1000/elapsedTime>limitFPS)
-		{
-			SDL_Delay(5);
 		}
 
 		if (hud_enable)
