@@ -240,10 +240,9 @@ void open_link(char *uri);
 int report_ui(pixel *vid_buf, char *save_id);
 
 char *console_ui(pixel *vid_buf, char error[255],char console_more);
-int console_parse_coords(char *txt, int *x, int *y, char *err);
-int console_parse_type(char *txt, int *element, char *err);
-int console_parse_partref(char *txt, int *which, char *err);
 
-void decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy);
+void simulation_ui(pixel *vid_buf);
+
+void decorations_ui(pixel *vid_buf, pixel *decorations, int *bsx, int *bsy);
 #endif
 
