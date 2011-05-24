@@ -173,6 +173,7 @@ int sys_pause = 0;
 int sys_shortcuts = 1;
 int legacy_enable = 0; //Used to disable new features such as heat, will be set by save.
 int ngrav_enable = 0; //Newtonian gravity, will be set by save
+int decorations_enable = 1;
 int death = 0, framerender = 0;
 int amd = 1;
 int FPSB = 0;
@@ -1231,11 +1232,18 @@ char my_uri[] = "http://" SERVER "/Update.api?Action=Download&Architecture="
 #endif
                 ;
 
-void set_scale(int scale, int kiosk){
+int set_scale(int scale, int kiosk){
+	int old_scale = sdl_scale, old_kiosk = kiosk_enable;
 	sdl_scale = scale;
 	kiosk_enable = kiosk;
-	sdl_open();
-	return;
+	if (!sdl_open())
+	{
+		sdl_scale = old_scale;
+		kiosk_enable = old_kiosk;
+		sdl_open();
+		return 0;
+	}
+	return 1;
 }
 				
 void update_grav_async()
@@ -1386,6 +1394,7 @@ int main(int argc, char *argv[])
 	void *load_data=NULL;
 	pixel *load_img=NULL;//, *fbi_img=NULL;
 	int save_mode=0, save_x=0, save_y=0, save_w=0, save_h=0, copy_mode=0;
+	unsigned int hsvSave = PIXRGB(0,255,127);//this is hsv format
 	SDL_AudioSpec fmt;
 	int username_flash = 0, username_flash_t = 1;
 #ifdef PYCONSOLE
@@ -1564,7 +1573,7 @@ int main(int argc, char *argv[])
 
 	stamp_init();
 
-	sdl_open();
+	if (!sdl_open()) exit(1);
 	http_init(http_proxy_string[0] ? http_proxy_string : NULL);
 
 	if (cpu_check())
@@ -2003,9 +2012,7 @@ int main(int argc, char *argv[])
 						vy[ny][nx] = -vy[ny][nx];
 					}
 			}
-			if ((sdl_mod & (KMOD_RCTRL) )&&( sdl_mod & (KMOD_RALT)))
-				active_menu = 11;
-			if (sdl_key==SDLK_INSERT)// || sdl_key==SDLK_BACKQUOTE)
+			if (sdl_key==SDLK_INSERT || sdl_key == SDLK_SEMICOLON)// || sdl_key==SDLK_BACKQUOTE)
 				REPLACE_MODE = !REPLACE_MODE;
 			if (sdl_key==SDLK_BACKQUOTE)
 			{
@@ -2014,8 +2021,19 @@ int main(int argc, char *argv[])
 			}
 			if (sdl_key=='b')
 			{
-				decorations_ui(vid_buf,decorations,&bsx,&bsy);//decoration_mode = !decoration_mode;
-				sys_pause=1;
+				if (sdl_mod & KMOD_CTRL)
+				{
+					decorations_enable = !decorations_enable;
+					itc = 51;
+					if (decorations_enable) strcpy(itc_msg, "Decorations layer: On");
+					else strcpy(itc_msg, "Decorations layer: Off");
+				}
+				else
+				{
+					hsvSave = decorations_ui(vid_buf,decorations,&bsx,&bsy,hsvSave);//decoration_mode = !decoration_mode;
+					decorations_enable = 1;
+					sys_pause=1;
+				}
 			}
 			if (sdl_key=='g')
 			{
@@ -2309,7 +2327,7 @@ int main(int argc, char *argv[])
 			}
 		}
 		menu_ui_v3(vid_buf, active_menu, &sl, &sr, &dae, b, bq, x, y); //draw the elements in the current menu
-		draw_decorations(vid_buf,decorations);
+		if (decorations_enable) draw_decorations(vid_buf,decorations);
 		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy //change mouse position while it is in a zoom window
 		        && x<sdl_scale*(zoom_wx+ZFACTOR*ZSIZE)
 		        && y<sdl_scale*(zoom_wy+ZFACTOR*ZSIZE))
@@ -2993,7 +3011,7 @@ int main(int argc, char *argv[])
 				drawtext(vid_buf, 16, YRES-24, "Click-and-drag to specify a rectangle to copy (right click = cancel).", 255, 216, 32, da*5);
 				break;
 			case 270:
-				drawtext(vid_buf, 16, YRES-24, "Enable or disable compatibility mode (disables heat simulation).", 255, 255, 255, da*5);
+				drawtext(vid_buf, 16, YRES-24, "Simulation options", 255, 255, 255, da*5);
 				break;
 			case 271:
 				drawtext(vid_buf, 16, YRES-24, "You're a moderator", 255, 255, 255, da*5);
