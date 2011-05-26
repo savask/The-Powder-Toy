@@ -1554,8 +1554,17 @@ void update_particles_i(pixel *vid, int start, int inc)
 
 			if (ptypes[t].diffusion)//the random diffusion that gasses have
 			{
-				parts[i].vx += ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
-				parts[i].vy += ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
+				if (parts[i].temp>0)
+				{
+					//Slow square root
+					parts[i].vx += (sqrt(parts[i].temp)/14.0f)*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
+					parts[i].vy += (sqrt(parts[i].temp)/14.0f)*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
+				}
+				else
+				{
+					parts[i].vx += rand()/(0.5f*RAND_MAX)-1.0f;
+					parts[i].vy += rand()/(0.5f*RAND_MAX)-1.0f;
+				}
 			}
 
 			j = surround_space = nt = 0;//if nt is 1 after this, then there is a particle around the current particle, that is NOT the current particle's type, for water movement.
