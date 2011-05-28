@@ -1312,6 +1312,7 @@ int main(int argc, char *argv[])
 	int load_size, i=0, j=0;
 	void *load_data = file_load(argv[1], &load_size);
 	unsigned char c[3];
+	char ppmfilename[256], ptifilename[256], ptismallfilename[256];
 	FILE *f;
 	
 	cmode = CM_FIRE;
@@ -1322,10 +1323,15 @@ int main(int argc, char *argv[])
 	parts[NPART-1].life = -1;
 	pfree = 0;
 	
+	decorations = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	fire_bg = calloc(XRES*YRES, PIXELSIZE);
 	
 	prepare_alpha();
+
+	sprintf(ppmfilename, "%s.ppm", argv[2]);
+	sprintf(ptifilename, "%s.pti", argv[2]);
+	sprintf(ptismallfilename, "%s-small.pti", argv[2]);
 	
 	if(load_data && load_size){
 		int parsestate = 0;
@@ -1345,8 +1351,30 @@ int main(int argc, char *argv[])
 			//return 0;
 			info_box(vid_buf, "Save file invalid or from newer version");
 		}
-		
-		f=fopen(argv[2],"wb");
+
+		//Save PTi images
+		char * datares = NULL, *scaled_buf;
+		int res = 0, sw, sh;
+		datares = ptif_pack(vid_buf, XRES, YRES, &res);
+		if(datares!=NULL){
+			f=fopen(ptifilename, "wb");
+			fwrite(datares, res, 1, f);
+			fclose(f);
+			free(datares);
+			datares = NULL;
+		}
+		scaled_buf = resample_img(vid_buf, XRES, YRES, XRES/4, YRES/4);
+		datares = ptif_pack(scaled_buf, XRES/4, YRES/4, &res);
+		if(datares!=NULL){
+			f=fopen(ptismallfilename, "wb");
+			fwrite(datares, res, 1, f);
+			fclose(f);
+			free(datares);
+			datares = NULL;
+		}
+		free(scaled_buf);
+		//Save PPM image
+		f=fopen(ppmfilename, "wb");
 		fprintf(f,"P6\n%d %d\n255\n",XRES,YRES);
 		for (j=0; j<YRES; j++)
 		{
@@ -1481,7 +1509,7 @@ int main(int argc, char *argv[])
 		pygood = 0;
 	}
 #else
-	printf("python console disabled at compile time.");
+	printf("python console disabled at compile time.\n");
 #endif
 
 #ifdef MT
