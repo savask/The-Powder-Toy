@@ -76,10 +76,10 @@ int eval_move(int pt, int nx, int ny, unsigned *rr)
 	if (rr)
 		*rr = r;
 
-	if ((r&0xFF)==PT_VOID || (r&0xFF)==PT_BHOL)
+	if ((r&0xFF)==PT_VOID || (r&0xFF)==PT_BHOL || (r&0xFF)==PT_NBHL)
 		return 1;
 
-	if ((r&0xFF)==PT_WHOL && pt==PT_ANAR)
+	if (((r&0xFF)==PT_WHOL||(r&0xFF)==PT_NWHL) && pt==PT_ANAR)
 		return 1;
 
 	if (pt==PT_SPRK)//spark shouldn't move
@@ -255,7 +255,7 @@ int try_move(int i, int x, int y, int nx, int ny)
 		parts[i].type=PT_NONE;
 		return 0;
 	}
-	if ((r&0xFF)==PT_BHOL) //this is where blackhole eats particles
+	if ((r&0xFF)==PT_BHOL || (r&0xFF)==PT_NBHL) //this is where blackhole eats particles
 	{
 		if (parts[i].type == PT_STKM)
 		{
@@ -275,7 +275,7 @@ int try_move(int i, int x, int y, int nx, int ny)
 
 		return 0;
 	}
-	if ((r&0xFF)==PT_WHOL && parts[i].type==PT_ANAR) //whitehole eats anar
+	if (((r&0xFF)==PT_WHOL||(r&0xFF)==PT_NWHL) && parts[i].type==PT_ANAR) //whitehole eats anar
 	{
 		parts[i].type=PT_NONE;
 		if (!legacy_enable)
@@ -1539,7 +1539,13 @@ void update_particles_i(pixel *vid, int start, int inc)
 				pGravY = ptypes[t].gravity * ((float)(y - YCNTR) / pGravD);
 			}
 			//Get some gravity from the gravity map
-			if(!(ptypes[t].properties & TYPE_SOLID))
+			if (t==PT_ANAR)
+			{
+				// perhaps we should have a ptypes variable for this
+				pGravX -= gravx[y/CELL][x/CELL];
+				pGravY -= gravy[y/CELL][x/CELL];
+			}
+			else if(!(ptypes[t].properties & TYPE_SOLID))
 			{
 				pGravX += gravx[y/CELL][x/CELL];
 				pGravY += gravy[y/CELL][x/CELL];
@@ -2078,19 +2084,21 @@ killed:
 								rt = 10;
 							for (j=clear_x+r; j>=0 && j>=clear_x-rt && j<clear_x+rt && j<XRES; j+=r)
 							{
-								if (s=do_move(i, x, y, (float)j, fin_yf))
+								if (((pmap[fin_y][j]&0xFF)!=t || bmap[fin_y/CELL][j/CELL])
+									&& (s=do_move(i, x, y, (float)j, fin_yf)))
 								{
 									nx = (int)(parts[i].x+0.5f);
 									ny = (int)(parts[i].y+0.5f);
 									break;
 								}
-								if (fin_y!=clear_y && (s=do_move(i, x, y, (float)j, clear_yf)))
+								if (fin_y!=clear_y && ((pmap[clear_y][j]&0xFF)!=t || bmap[clear_y/CELL][j/CELL])
+									&& (s=do_move(i, x, y, (float)j, clear_yf)))
 								{
 									nx = (int)(parts[i].x+0.5f);
 									ny = (int)(parts[i].y+0.5f);
 									break;
 								}
-								if ((pmap[y][j]&255)!=t || (bmap[y/CELL][j/CELL] && bmap[y/CELL][j/CELL]!=WL_STREAM))
+								if ((pmap[fin_y][j]&0xFF)!=t || (bmap[fin_y/CELL][j/CELL] && bmap[fin_y/CELL][j/CELL]!=WL_STREAM))
 									break;
 							}
 							if (parts[i].vy>0)
@@ -2100,7 +2108,7 @@ killed:
 							if (s==1)
 								for (j=ny+r; j>=0 && j<YRES && j>=ny-rt && j<ny+rt; j+=r)
 								{
-									if (do_move(i, nx, ny, (float)nx, (float)j))
+									if (((pmap[j][nx]&0xFF)!=t || bmap[j/CELL][nx/CELL]) && do_move(i, nx, ny, (float)nx, (float)j))
 										break;
 									if ((pmap[j][nx]&255)!=t || (bmap[j/CELL][nx/CELL] && bmap[j/CELL][nx/CELL]!=WL_STREAM))
 										break;
