@@ -24,9 +24,9 @@ int update_SING(UPDATE_FUNC_ARGS) {
 	}
 	if (parts[i].life<1) {
 		//Pop!
-		for (rx=-2; rx<3; rx++) {
+		for (rx=-1; rx<2; rx++) {
 			crx = (x/CELL)+rx;
-			for (ry=-2; ry<3; ry++) {
+			for (ry=-1; ry<2; ry++) {
 				cry = (y/CELL)+ry;
 				if (cry > 0 && crx > 0 && crx < (XRES/CELL) && cry < (YRES/CELL)) {
 					pv[cry][crx] += (float)parts[i].tmp;

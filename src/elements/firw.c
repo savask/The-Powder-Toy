@@ -36,8 +36,8 @@ int update_FIRW(UPDATE_FUNC_ARGS) {
 	else if (parts[i].tmp==2) {
 		int col = rand()%200+4;
 		int tmul;
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
 					r = pmap[y+ry][x+rx];

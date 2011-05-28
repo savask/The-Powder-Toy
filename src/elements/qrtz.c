@@ -13,8 +13,8 @@ int update_QRTZ(UPDATE_FUNC_ARGS) {
 		}
 	}
 	//new QRTZ growth
-	for (rx=-2; rx<3 && parts[i].ctype!=-1; rx++)
-		for (ry=-2; ry<3; ry++)
+	for (rx=-1; rx<2 && parts[i].ctype!=-1; rx++)
+		for (ry=-1; ry<2; ry++)
 			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 			{
 				r = pmap[y+ry][x+rx];

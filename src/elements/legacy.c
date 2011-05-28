@@ -6,8 +6,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 	int t = parts[i].type;
 	if (!legacy_enable) return 0;
 	if (t==PT_WTRV) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 &&
 				        x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
@@ -28,8 +28,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 				}
 	}
 	else if (t==PT_WATR) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 &&
 				        x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
@@ -43,8 +43,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 				}
 	}
 	else if (t==PT_SLTW) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 &&
 				        x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
@@ -59,8 +59,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 				}
 	}
 	else if (t==PT_DSTW) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 &&
 				        x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
@@ -74,8 +74,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 				}
 	}
 	else if (t==PT_ICEI) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
 					r = pmap[y+ry][x+rx];
@@ -89,8 +89,8 @@ int update_legacy_all(UPDATE_FUNC_ARGS) {
 				}
 	}
 	else if (t==PT_SNOW) {
-		for (rx=-2; rx<3; rx++)
-			for (ry=-2; ry<3; ry++)
+		for (rx=-1; rx<2; rx++)
+			for (ry=-1; ry<2; ry++)
 				if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 				{
 					r = pmap[y+ry][x+rx];
