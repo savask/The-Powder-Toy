@@ -59,6 +59,8 @@ int search_date = 0;
 int search_page = 0;
 char search_expr[256] = "";
 
+char server_motd[512] = "";
+
 char *tag_names[TAG_MAX];
 int tag_votes[TAG_MAX];
 
@@ -515,6 +517,99 @@ void ui_copytext_process(int mx, int my, int mb, int mbq, ui_copytext *ed)
 		ed->hover = 1;
 	} else {
 		ed->hover = 0;
+	}
+}
+
+void ui_richtext_draw(pixel *vid_buf, ui_richtext *ed)
+{
+	ed->str[511] = 0;
+	ed->printstr[511] = 0;
+	drawtext(vid_buf, ed->x, ed->y, ed->printstr, 255, 255, 255, 255);
+}
+
+int markup_getregion(char *text, char *action, char *data, char *atext){
+	int datamarker = 0;
+	int terminator = 0;
+	int minit;
+	if (sregexp(text, "^{a:.*|.*}")==0)
+	{
+		*action = text[1];
+		for (minit=3; text[minit-1] != '|'; minit++)
+			datamarker = minit + 1;
+		for (minit=datamarker; text[minit-1] != '}'; minit++)
+			terminator = minit + 1;
+		strncpy(data, text+3, datamarker-4);
+		strncpy(atext, text+datamarker, terminator-datamarker-1);
+		return terminator;
+	}
+	else
+	{
+		return 0;
+	}	
+}
+
+void ui_richtext_settext(char *text, ui_richtext *ed)
+{
+	int pos = 0, action = 0, ppos = 0, ipos = 0;
+	strcpy(ed->str, text);
+	//strcpy(ed->printstr, text);
+	for(action = 0; action < 6; action++){
+		ed->action[action] = 0;	
+		memset(ed->actiondata[action], 0, 256);
+		memset(ed->actiontext[action], 0, 256);
+	}
+	action = 0;
+	for(pos = 0; pos<512; ){
+		if(!ed->str[pos])
+			break;
+		if(ed->str[pos] == '{'){
+			int mulen = 0;
+			mulen = markup_getregion(ed->str+pos, &ed->action[action], ed->actiondata[action], ed->actiontext[action]);
+			if(mulen){
+				ed->regionss[action] = ipos;
+				ed->regionsf[action] = ipos + strlen(ed->actiontext[action]);
+				//printf("%c, %s, %s [%d, %d]\n", ed->action[action], ed->actiondata[action], ed->actiontext[action], ed->regionss[action], ed->regionsf[action]);
+				strcpy(ed->printstr+ppos, ed->actiontext[action]);
+				ppos+=strlen(ed->actiontext[action]);
+				ipos+=strlen(ed->actiontext[action]);
+				pos+=mulen;
+				action++;			
+			} 
+			else
+			{
+				pos++;			
+			}
+		} else {
+			ed->printstr[ppos] = ed->str[pos];
+			ppos++;
+			pos++;
+			ipos++;
+			if(ed->str[pos] == '\b'){
+				ipos-=2;			
+			}
+		}
+	}
+	ed->printstr[ppos] = 0;
+	//printf("%s\n", ed->printstr);
+}
+
+void ui_richtext_process(int mx, int my, int mb, int mbq, ui_richtext *ed)
+{
+	int action = 0;
+	int currentpos = 0;
+	if(mx>ed->x && mx < ed->x+textwidth(ed->printstr) && my > ed->y && my < ed->y + 10 && mb && !mbq){
+		currentpos = textwidthx(ed->printstr, mx-ed->x);
+		for(action = 0; action < 6; action++){
+			if(currentpos >= ed->regionss[action] && currentpos <= ed->regionsf[action])
+			{	
+				//Do action
+				if(ed->action[action]=='a'){
+					//Open link
+					open_link(ed->actiondata[action]);	
+				}
+				break;
+			}
+		}
 	}
 }
 
@@ -2254,6 +2349,7 @@ int search_ui(pixel *vid_buf)
 	float ry;
 	time_t http_last_use=HTTP_TIMEOUT;
 	ui_edit ed;
+	ui_richtext motd;
 
 
 	void *http = NULL;
@@ -2307,6 +2403,10 @@ int search_ui(pixel *vid_buf)
 	ed.cursor = strlen(search_expr);
 	ed.multiline = 0;
 	strcpy(ed.str, search_expr);
+
+	motd.x = 20;
+	motd.y = 33;
+	motd.str[0] = 0;
 
 	sdl_wheel = 0;
 
@@ -2423,12 +2523,16 @@ int search_ui(pixel *vid_buf)
 
 		tp = -1;
 		if (is_p1)
-		{
-			drawtext(vid_buf, (XRES-textwidth("Popular tags:"))/2, 31, "Popular tags:", 255, 192, 64, 255);
+		{	
+			//Message of the day
+			ui_richtext_process(mx, my, b, bq, &motd);
+			ui_richtext_draw(vid_buf, &motd);
+			//Popular tags
+			drawtext(vid_buf, (XRES-textwidth("Popular tags:"))/2, 49, "Popular tags:", 255, 192, 64, 255);
 			for (gj=0; gj<((GRID_Y-GRID_P)*YRES)/(GRID_Y*14); gj++)
-				for (gi=0; gi<GRID_X; gi++)
+				for (gi=0; gi<(GRID_X+1); gi++)
 				{
-					pos = gi+GRID_X*gj;
+					pos = gi+(GRID_X+1)*gj;
 					if (pos>TAG_MAX || !tag_names[pos])
 						break;
 					if (tag_votes[0])
@@ -2436,18 +2540,18 @@ int search_ui(pixel *vid_buf)
 					else
 						i = 192;
 					w = textwidth(tag_names[pos]);
-					if (w>XRES/GRID_X-5)
-						w = XRES/GRID_X-5;
-					gx = (XRES/GRID_X)*gi;
-					gy = gj*14 + 46;
-					if (mx>=gx && mx<gx+(XRES/GRID_X) && my>=gy && my<gy+14)
+					if (w>XRES/(GRID_X+1)-5)
+						w = XRES/(GRID_X+1)-5;
+					gx = (XRES/(GRID_X+1))*gi;
+					gy = gj*13 + 62;
+					if (mx>=gx && mx<gx+(XRES/((GRID_X+1)+1)) && my>=gy && my<gy+14)
 					{
 						j = (i*5)/6;
 						tp = pos;
 					}
 					else
 						j = i;
-					drawtextmax(vid_buf, gx+(XRES/GRID_X-w)/2, gy, XRES/GRID_X-5, tag_names[pos], j, j, i, 255);
+					drawtextmax(vid_buf, gx+(XRES/(GRID_X+1)-w)/2, gy, XRES/(GRID_X+1)-5, tag_names[pos], j, j, i, 255);
 				}
 		}
 
@@ -2782,6 +2886,9 @@ int search_ui(pixel *vid_buf)
 				page_count = search_results(results, last_own||svf_admin||svf_mod);
 				memset(thumb_drawn, 0, sizeof(thumb_drawn));
 				memset(v_buf, 0, ((YRES+MENUSIZE)*(XRES+BARSIZE))*PIXELSIZE);
+			
+				ui_richtext_settext(server_motd, &motd);
+				motd.x = (XRES-textwidth(motd.printstr))/2;
 			}
 			is_p1 = (exp_res < GRID_X*GRID_Y);
 			if (results)
@@ -3375,7 +3482,7 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 		if (queue_open) {
 			if (info_ready && data_ready) {
 				// Do Open!
-				status = parse_save(data, data_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap, decorations);
+				status = parse_save(data, data_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 				if (!status) {
 					//if(svf_last)
 					//free(svf_last);
@@ -3599,6 +3706,7 @@ int search_results(char *str, int votes)
 			free(tag_names[j]);
 			tag_names[j] = NULL;
 		}
+	server_motd[0] = 0;
 
 	if (!str || !*str)
 		return 0;
@@ -3749,6 +3857,10 @@ int search_results(char *str, int votes)
 			thumb_cache_find(str+8, search_thumbs+i, search_thsizes+i);
 			i++;
 		}
+		else if (!strncmp(str, "MOTD ", 5))
+		{
+			memcpy(server_motd, str+5, strlen(str+5));
+		}
 		else if (!strncmp(str, "TAG ", 4))
 		{
 			if (j >= TAG_MAX)
@@ -3896,7 +4008,7 @@ void execute_save(pixel *vid_buf)
 	plens[0] = strlen(svf_name);
 	uploadparts[1] = svf_description;
 	plens[1] = strlen(svf_description);
-	uploadparts[2] = build_save(plens+2, 0, 0, XRES, YRES, bmap, fvx, fvy, signs, parts, decorations);
+	uploadparts[2] = build_save(plens+2, 0, 0, XRES, YRES, bmap, fvx, fvy, signs, parts);
 	uploadparts[3] = build_thumb(plens+3, 1);
 	uploadparts[4] = (svf_publish==1)?"Public":"Private";
 	plens[4] = strlen((svf_publish==1)?"Public":"Private");
@@ -4334,7 +4446,7 @@ char *console_ui(pixel *vid_buf,char error[255],char console_more) {
 	return NULL;
 }
 
-unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy, unsigned int savedColor)
+unsigned int decorations_ui(pixel *vid_buf,int *bsx,int *bsy, unsigned int savedColor)
 {//TODO: have the text boxes be editable and update the color. Maybe use 0-360 for H in hsv to fix minor inaccuracies (rgb of 0,0,255 , comes back as 0,3,255)
 	int i,ss,hh,vv,cr=127,cg=0,cb=0,b = 0,mx,my,bq = 0,j, lb=0,lx=0,ly=0,lm=0,hidden=0;
 	int window_offset_x_left = 2;
@@ -4401,7 +4513,7 @@ unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy,
 		my /= sdl_scale;
 
 		memcpy(vid_buf,old_buf,(XRES+BARSIZE)*(YRES+MENUSIZE)*PIXELSIZE);
-		draw_parts(vid_buf);//draw_decorations(vid_buf,decorations);
+		draw_parts(vid_buf);
 		//ui_edit_process(mx, my, b, &box_R);
 		//ui_edit_process(mx, my, b, &box_G);
 		//ui_edit_process(mx, my, b, &box_B);
@@ -4536,7 +4648,11 @@ unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy,
 			}
 			if(b && !bq && mx >= window_offset_x + 230 && my >= window_offset_y +255+6 && mx <= window_offset_x + 230 +26 && my <= window_offset_y +255+5 +13)
 				if (confirm_ui(vid_buf, "Reset Decoration Layer", "Do you really want to erase everything?", "Erase") )
-					memset(decorations, 0,(XRES+BARSIZE)*YRES*PIXELSIZE);
+				{
+					int i;
+					for (i=0;i<NPART;i++)
+						parts[i].dcolour = 0;
+				}
 		}
 		else if (mx > XRES || my > YRES)
 		{
@@ -4584,7 +4700,7 @@ unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy,
 				}
 				else if(lb!=3)//while mouse is held down, it draws lines between previous and current positions
 				{
-					line_decorations(decorations,lx, ly, mx, my, *bsx, *bsy, cr, cg, cb);
+					line_decorations(lx, ly, mx, my, *bsx, *bsy, cr, cg, cb);
 					lx = mx;
 					ly = my;
 				}
@@ -4625,7 +4741,7 @@ unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy,
 				}
 				else //normal click, draw deco
 				{
-					create_decorations(decorations,mx,my,*bsx,*bsy,cr,cg,cb);
+					create_decorations(mx,my,*bsx,*bsy,cr,cg,cb);
 					lx = mx;
 					ly = my;
 					lb = b;
@@ -4644,9 +4760,9 @@ unsigned int decorations_ui(pixel *vid_buf,pixel *decorations,int *bsx,int *bsy,
 			if (lb && lm) //lm is box/line tool
 			{
 				if (lm == 1)//line
-					line_decorations(decorations,lx, ly, mx, my, *bsx, *bsy, cr, cg, cb);
+					line_decorations(lx, ly, mx, my, *bsx, *bsy, cr, cg, cb);
 				else//box
-					box_decorations(decorations,lx, ly, mx, my, cr, cg, cb);
+					box_decorations(lx, ly, mx, my, cr, cg, cb);
 				lm = 0;
 			}
 			lb = 0;

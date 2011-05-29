@@ -59,7 +59,7 @@
 #include "pyconsole.h"
 #endif
 
-pixel *vid_buf, *decorations;
+pixel *vid_buf;
 
 #define NUM_SOUNDS 2
 struct sample {
@@ -319,9 +319,9 @@ void *build_thumb(int *size, int bzip2)
 }
 
 //the saving function
-void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr, pixel *decorations)
+void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr)
 {
-	unsigned char *d=calloc(1,3*(XRES/CELL)*(YRES/CELL)+(XRES*YRES)*11+MAXSIGNS*262), *c;
+	unsigned char *d=calloc(1,3*(XRES/CELL)*(YRES/CELL)+(XRES*YRES)*15+MAXSIGNS*262), *c;
 	int i,j,x,y,p=0,*m=calloc(XRES*YRES, sizeof(int));
 	int bx0=x0/CELL, by0=y0/CELL, bw=(w+CELL-1)/CELL, bh=(h+CELL-1)/CELL;
 	particle *parts = partsptr;
@@ -419,6 +419,38 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
+		if (i) {
+			//Save colour (ALPHA)
+			d[p++] = (parts[i-1].dcolour&0xFF000000)>>24;
+		}
+	}
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i) {
+			//Save colour (RED)
+			d[p++] = (parts[i-1].dcolour&0x00FF0000)>>16;
+		}
+	}
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i) {
+			//Save colour (GREEN)
+			d[p++] = (parts[i-1].dcolour&0x0000FF00)>>8;
+		}
+	}
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i) {
+			//Save colour (BLUE)
+			d[p++] = (parts[i-1].dcolour&0x000000FF);
+		}
+	}
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
 		if (i)
 		{
 			//New Temperature saving uses a 16bit unsigned int for temperatures, giving a precision of 1 degree versus 36 for the old format
@@ -466,7 +498,7 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 	c[0] = 0x50;	//0x66;
 	c[1] = 0x53;	//0x75;
 	c[2] = 0x76;	//0x43;
-	c[3] = legacy_enable|((sys_pause<<1)&0x02)|((gravityMode<<2)&0x0C)|((airMode<<4)&0x70);
+	c[3] = legacy_enable|((sys_pause<<1)&0x02)|((gravityMode<<2)&0x0C)|((airMode<<4)&0x70)|((ngrav_enable<<7)&0x80);
 	c[4] = SAVE_VERSION;
 	c[5] = CELL;
 	c[6] = bw;
@@ -492,10 +524,10 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 	return c;
 }
 
-int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr, unsigned pmap[YRES][XRES], pixel *decorations)
+int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char bmap[YRES/CELL][XRES/CELL], float fvx[YRES/CELL][XRES/CELL], float fvy[YRES/CELL][XRES/CELL], sign signs[MAXSIGNS], void* partsptr, unsigned pmap[YRES][XRES])
 {
 	unsigned char *d=NULL,*c=save;
-	int q,i,j,k,x,y,p=0,*m=NULL, ver, pty, ty, legacy_beta=0;
+	int q,i,j,k,x,y,p=0,*m=NULL, ver, pty, ty, legacy_beta=0, tempGrav = 0;
 	int bx0=x0/CELL, by0=y0/CELL, bw, bh, w, h;
 	int fp[NPART], nf=0, new_format = 0, ttv = 0;
 	particle *parts = partsptr;
@@ -528,6 +560,9 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 			if (ver>=46 && replace) {
 				gravityMode = ((c[3]>>2)&0x03);// | ((c[3]>>2)&0x01);
 				airMode = ((c[3]>>4)&0x07);// | ((c[3]>>4)&0x02) | ((c[3]>>4)&0x01);
+			}
+			if (ver>=49 && replace) {
+				tempGrav = ((c[3]>>7)&0x01);			
 			}
 		} else {
 			if (c[3]==1||c[3]==0) {
@@ -580,7 +615,6 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		}
 		clear_sim();
 	}
-	clearrect(decorations, x0, y0, w, h);
 	m = calloc(XRES*YRES, sizeof(int));
 
 	// make a catalog of free parts
@@ -818,6 +852,78 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 			}
 		}
 	}
+	//Read ALPHA component
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i)
+		{
+			if (ver>=49) {
+				if (p >= size) {
+					goto corrupt;
+				}
+				if (i <= NPART) {
+					parts[i-1].dcolour = d[p++]<<24;
+				} else {
+					p++;
+				}
+			}
+		}
+	}
+	//Read RED component
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i)
+		{
+			if (ver>=49) {
+				if (p >= size) {
+					goto corrupt;
+				}
+				if (i <= NPART) {
+					parts[i-1].dcolour |= d[p++]<<16;
+				} else {
+					p++;
+				}
+			}
+		}
+	}
+	//Read GREEN component
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i)
+		{
+			if (ver>=49) {
+				if (p >= size) {
+					goto corrupt;
+				}
+				if (i <= NPART) {
+					parts[i-1].dcolour |= d[p++]<<8;
+				} else {
+					p++;
+				}
+			}
+		}
+	}
+	//Read BLUE component
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i)
+		{
+			if (ver>=49) {
+				if (p >= size) {
+					goto corrupt;
+				}
+				if (i <= NPART) {
+					parts[i-1].dcolour |= d[p++];
+				} else {
+					p++;
+				}
+			}
+		}
+	}
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
@@ -861,7 +967,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				parts[i-1].temp = ptypes[parts[i-1].type].heat;
 			}
 		}
-	}
+	} 
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
@@ -883,10 +989,19 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				// Replace invisible particles with something sensible and add decoration to hide it
 				x = (int)(parts[i-1].x+0.5f);
 				y = (int)(parts[i-1].y+0.5f);
-				decorations[y*(XRES+BARSIZE)+x] = PIXPACK(0x010101);
+				parts[i-1].dcolour = 0xFF000000;
 				parts[i-1].type = PT_DMND;
 			}
 		}
+	}
+
+	//Change the gravity state
+	if(ngrav_enable != tempGrav && replace)
+	{
+		if(tempGrav)
+			start_grav_async();
+		else
+			stop_grav_async();
 	}
 
 	if (p >= size)
@@ -1046,7 +1161,7 @@ void stamp_save(int x, int y, int w, int h)
 	FILE *f;
 	int n;
 	char fn[64], sn[16];
-	void *s=build_save(&n, x, y, w, h, bmap, fvx, fvy, signs, parts, decorations);
+	void *s=build_save(&n, x, y, w, h, bmap, fvx, fvy, signs, parts);
 
 #ifdef WIN32
 	_mkdir("stamps");
@@ -1322,8 +1437,7 @@ int main(int argc, char *argv[])
 		parts[i].life = i+1;
 	parts[NPART-1].life = -1;
 	pfree = 0;
-	
-	decorations = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
+
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	fire_bg = calloc(XRES*YRES, PIXELSIZE);
 	
@@ -1335,7 +1449,8 @@ int main(int argc, char *argv[])
 	
 	if(load_data && load_size){
 		int parsestate = 0;
-		parsestate = parse_save(load_data, load_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap, decorations);
+		//parsestate = parse_save(load_data, load_size, 1, 0, 0);
+		parsestate = parse_save(load_data, load_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 		
 		for(i=0; i<30; i++){
 			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
@@ -1433,7 +1548,6 @@ int main(int argc, char *argv[])
     pthread_win32_process_attach_np();
     pthread_win32_thread_attach_np();
 #endif
-	decorations = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	GSPEED = 1;
@@ -1536,6 +1650,7 @@ int main(int argc, char *argv[])
 	parts[NPART-1].life = -1;
 	pfree = 0;
 	fire_bg=calloc(XRES*YRES, PIXELSIZE);
+	init_can_move();
 	clear_sim();
 
 	//fbi_img = render_packed_rgb(fbi, FBI_W, FBI_H, FBI_CMP);
@@ -1588,7 +1703,7 @@ int main(int argc, char *argv[])
 			if (file_data)
 			{
 				it=0;
-				parse_save(file_data, size, 0, 0, 0, bmap, fvx, fvy, signs, parts, pmap, decorations);
+				parse_save(file_data, size, 0, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 			}
 		}
 
@@ -2058,7 +2173,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
-					hsvSave = decorations_ui(vid_buf,decorations,&bsx,&bsy,hsvSave);//decoration_mode = !decoration_mode;
+					hsvSave = decorations_ui(vid_buf,&bsx,&bsy,hsvSave);//decoration_mode = !decoration_mode;
 					decorations_enable = 1;
 					sys_pause=1;
 				}
@@ -2355,7 +2470,6 @@ int main(int argc, char *argv[])
 			}
 		}
 		menu_ui_v3(vid_buf, active_menu, &sl, &sr, &dae, b, bq, x, y); //draw the elements in the current menu
-		if (decorations_enable) draw_decorations(vid_buf,decorations);
 		if (zoom_en && x>=sdl_scale*zoom_wx && y>=sdl_scale*zoom_wy //change mouse position while it is in a zoom window
 		        && x<sdl_scale*(zoom_wx+ZFACTOR*ZSIZE)
 		        && y<sdl_scale*(zoom_wy+ZFACTOR*ZSIZE))
@@ -2574,7 +2688,7 @@ int main(int argc, char *argv[])
 			if (load_y<0) load_y=0;
 			if (bq==1 && !b)
 			{
-				parse_save(load_data, load_size, 0, load_x, load_y, bmap, fvx, fvy, signs, parts, pmap, decorations);
+				parse_save(load_data, load_size, 0, load_x, load_y, bmap, fvx, fvy, signs, parts, pmap);
 				free(load_data);
 				free(load_img);
 				load_mode = 0;
@@ -2616,14 +2730,14 @@ int main(int argc, char *argv[])
 			{
 				if (copy_mode==1)//CTRL-C, copy
 				{
-					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts, decorations);
+					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts);
 					clipboard_ready = 1;
 					save_mode = 0;
 					copy_mode = 0;
 				}
 				else if (copy_mode==2)//CTRL-X, cut
 				{
-					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts, decorations);
+					clipboard_data=build_save(&clipboard_length, save_x*CELL, save_y*CELL, save_w*CELL, save_h*CELL, bmap, fvx, fvy, signs, parts);
 					clipboard_ready = 1;
 					save_mode = 0;
 					copy_mode = 0;
@@ -2710,8 +2824,6 @@ int main(int argc, char *argv[])
 						isplayer = 0;
 						ISSPAWN1 = 0;
 						ISSPAWN2 = 0;
-
-						memset(decorations, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 					}
 					if (x>=(XRES+BARSIZE-(510-385)) && x<=(XRES+BARSIZE-(510-476)))
 					{
@@ -2750,7 +2862,7 @@ int main(int argc, char *argv[])
 					}
 					if (x>=19 && x<=35 && svf_last && svf_open && !bq) {
 						//int tpval = sys_pause;
-						parse_save(svf_last, svf_lsize, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap, decorations);
+						parse_save(svf_last, svf_lsize, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 						//sys_pause = tpval;
 					}
 					if (x>=(XRES+BARSIZE-(510-476)) && x<=(XRES+BARSIZE-(510-491)) && !bq)

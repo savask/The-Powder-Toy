@@ -111,6 +111,19 @@ struct ui_checkbox
 };
 typedef struct ui_checkbox ui_checkbox;
 
+struct ui_richtext
+{
+	int x, y;
+	char str[512];
+	char printstr[512];
+	int regionss[6];
+	int regionsf[6];
+	char action[6];
+	char actiondata[6][256];
+	char actiontext[6][256];
+};
+typedef struct ui_richtext ui_richtext;
+
 int SLALT;
 extern SDLMod sdl_mod;
 extern int sdl_key, sdl_wheel, sdl_caps, sdl_ascii, sdl_zoom_trig;
@@ -178,6 +191,12 @@ void ui_copytext_draw(pixel *vid_buf, ui_copytext *ed);
 
 void ui_copytext_process(int mx, int my, int mb, int mbq, ui_copytext *ed);
 
+void ui_richtext_draw(pixel *vid_buf, ui_richtext *ed);
+
+void ui_richtext_settext(char *text, ui_richtext *ed);
+
+void ui_richtext_process(int mx, int my, int mb, int mbq, ui_richtext *ed);
+
 void draw_svf_ui(pixel *vid_buf);
 
 void error_ui(pixel *vid_buf, int err, char *txt);
@@ -240,6 +259,6 @@ char *console_ui(pixel *vid_buf, char error[255],char console_more);
 
 void simulation_ui(pixel *vid_buf);
 
-unsigned int decorations_ui(pixel *vid_buf, pixel *decorations, int *bsx, int *bsy, unsigned int savedColor);
+unsigned int decorations_ui(pixel *vid_buf, int *bsx, int *bsy, unsigned int savedColor);
 #endif
 
