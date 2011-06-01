@@ -1775,7 +1775,13 @@ int main(int argc, char *argv[])
 			bsy = 1180;
 		if (bsy<0)
 			bsy = 0;
-
+		
+		if(ngrav_enable)
+			draw_grav(vid_buf);
+		draw_walls(vid_buf);
+		update_particles(vid_buf); //update everything
+		draw_parts(vid_buf); //draw particles
+		
 		if(ngrav_enable){
 			pthread_mutex_lock(&gravmutex);
 			result = grav_ready;
@@ -1794,12 +1800,6 @@ int main(int argc, char *argv[])
 
 		if (!sys_pause||framerender) //Only update if not paused
 			memset(gravmap, 0, sizeof(gravmap)); //Clear the old gravmap
-		
-		if(ngrav_enable)
-			draw_grav(vid_buf);
-		draw_walls(vid_buf);
-		update_particles(vid_buf); //update everything
-		draw_parts(vid_buf); //draw particles
 
 		if (cmode==CM_PERS)
 		{
@@ -2372,9 +2372,9 @@ int main(int argc, char *argv[])
 					}
 			}
 		}
-#ifdef LUACONSOLE
-	luacon_keypress(sdl_key);
-#endif
+//#ifdef LUACONSOLE
+	//luacon_keypress(sdl_key);
+//#endif
 #ifdef PYCONSOLE
 		if (pyready==1 && pygood==1)
 			if (pkey!=NULL && sdl_key!=NULL)
@@ -2465,6 +2465,11 @@ int main(int argc, char *argv[])
 
 		bq = b; // bq is previous mouse state
 		b = SDL_GetMouseState(&x, &y); // b is current mouse state
+
+#ifdef LUACONSOLE
+		if(luacon_step(x, y, b, bq, sdl_key))
+			b = 0; //Mouse click was handled by Lua step
+#endif
 
 		for (i=0; i<SC_TOTAL; i++)//draw all the menu sections
 		{
@@ -3372,9 +3377,6 @@ int main(int argc, char *argv[])
 		}
 
 		//execute python step hook
-#ifdef LUACONSOLE
-		luacon_step();
-#endif
 #ifdef PYCONSOLE
 		if (pyready==1 && pygood==1)
 			if (pstep!=NULL)
