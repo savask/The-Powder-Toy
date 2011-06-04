@@ -4,8 +4,8 @@ int update_SWCH(UPDATE_FUNC_ARGS) {
 	int r, rt, rx, ry;
 	if (parts[i].life>0 && parts[i].life!=10)
 		parts[i].life--;
-	for (rx=-1; rx<2; rx++)
-		for (ry=-1; ry<2; ry++)
+	for (rx=-2; rx<3; rx++)
+		for (ry=-2; ry<3; ry++)
 			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 			{
 				r = pmap[y+ry][x+rx];
