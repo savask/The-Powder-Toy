@@ -1007,6 +1007,8 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		else
 			stop_grav_async();
 	}
+	
+	gravity_mask();
 
 	if (p >= size)
 		goto version1;
@@ -1036,6 +1038,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		{
 			memcpy(signs[k].text, d+p, x);
 			signs[k].text[x] = 0;
+			clean_text(signs[k].text, 158-14 /* Current max sign length */);
 		}
 		p += x;
 	}
@@ -1059,6 +1062,7 @@ corrupt:
 
 void clear_sim(void)
 {
+	int x, y;
 	memset(bmap, 0, sizeof(bmap));
 	memset(emap, 0, sizeof(emap));
 	memset(signs, 0, sizeof(signs));
@@ -1079,6 +1083,15 @@ void clear_sim(void)
 	memset(fire_r, 0, sizeof(fire_r));
 	memset(fire_g, 0, sizeof(fire_g));
 	memset(fire_b, 0, sizeof(fire_b));
+	memset(gravmask, 0xFF, sizeof(gravmask));
+	memset(gravy, 0, sizeof(gravy));
+	memset(gravx, 0, sizeof(gravx));
+	for(x = 0; x < XRES/CELL; x++){
+		for(y = 0; y < YRES/CELL; y++){
+			hv[y][x] = 273.15f+22.0f; //Set to room temperature
+		}
+	}
+	gravity_mask();
 }
 
 // stamps library
@@ -1482,8 +1495,8 @@ int main(int argc, char *argv[])
 			free(datares);
 			datares = NULL;
 		}
-		scaled_buf = resample_img(vid_buf, XRES, YRES, XRES/4, YRES/4);
-		datares = ptif_pack(scaled_buf, XRES/4, YRES/4, &res);
+		scaled_buf = resample_img(vid_buf, XRES, YRES, XRES/GRID_Z, YRES/GRID_Z);
+		datares = ptif_pack(scaled_buf, XRES/GRID_Z, YRES/GRID_Z, &res);
 		if(datares!=NULL){
 			f=fopen(ptismallfilename, "wb");
 			fwrite(datares, res, 1, f);
@@ -1529,7 +1542,7 @@ int main(int argc, char *argv[])
 	void *http_ver_check, *http_session_check = NULL;
 	char *ver_data=NULL, *check_data=NULL, *tmp;
 	//char console_error[255] = "";
-	int result, i, j, bq, fire_fc=0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, old_ver_len, new_message_len;
+	int result, i, j, bq, fire_fc=0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, old_ver_len, new_message_len=0;
 #ifdef INTERNAL
 	int vs = 0;
 #endif
@@ -1741,6 +1754,9 @@ int main(int argc, char *argv[])
 		http_session_check = http_async_req_start(NULL, "http://" SERVER "/Login.api?Action=CheckSession", NULL, 0, 0);
 		http_auth_headers(http_session_check, svf_user_id, NULL, svf_session_id);
 	}
+#ifdef LUACONSOLE
+	luacon_eval("dofile(\"autorun.lua\")"); //Autorun lua script
+#endif
 	while (!sdl_poll()) //the main loop
 	{
 		frameidx++;
@@ -1754,6 +1770,12 @@ int main(int argc, char *argv[])
 #ifdef OpenGL
 		ClearScreen();
 #else
+		if(gravwl_timeout)
+		{
+			if(gravwl_timeout==1)
+				gravity_mask();
+			gravwl_timeout--;
+		}
 		if (cmode==CM_VEL || cmode==CM_PRESS || cmode==CM_CRACK || (cmode==CM_HEAT && aheat_enable))//air only gets drawn in these modes
 		{
 			draw_air(vid_buf);
@@ -1784,6 +1806,8 @@ int main(int argc, char *argv[])
 		draw_walls(vid_buf); 
 		update_particles(vid_buf); //update everything
 		draw_parts(vid_buf); //draw particles
+		if(sl == WL_GRAV+100 || sr == WL_GRAV+100)
+			draw_grav_zones(vid_buf);
 		
 		if(ngrav_enable){
 			pthread_mutex_lock(&gravmutex);
@@ -1799,6 +1823,9 @@ int main(int argc, char *argv[])
 				}
 			}
 			pthread_mutex_unlock(&gravmutex);
+			//Apply the gravity mask
+			membwand(gravy, gravmask, sizeof(gravy), sizeof(gravmask));
+			membwand(gravx, gravmask, sizeof(gravx), sizeof(gravmask));
 		}
 
 		if (!sys_pause||framerender) //Only update if not paused

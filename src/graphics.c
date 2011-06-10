@@ -140,13 +140,29 @@ pixel *ptif_unpack(void *datain, int size, int *w, int *h){
 	return result;
 }
 
-pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
+pixel *resample_img_nn(pixel * src, int sw, int sh, int rw, int rh)
 {
 	int y, x;
+	pixel *q = NULL;
+	q = malloc(rw*rh*PIXELSIZE);
+	for (y=0; y<rh; y++)
+		for (x=0; x<rw; x++){
+			q[rw*y+x] = src[sw*(y*sh/rh)+(x*sw/rw)];
+		}
+	return q;
+}
+
+pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
+{
+	int y, x, fxceil, fyceil;
 	//int i,j,x,y,w,h,r,g,b,c;
 	pixel *q = NULL;
 	//TODO: Actual resampling, this is just cheap nearest pixel crap
-	if(rw > sw && rh > sh){
+	if(rw == sw && rh == sh){
+		//Don't resample
+		q = malloc(rw*rh*PIXELSIZE);
+		memcpy(q, src, rw*rh*PIXELSIZE);
+	} else if(rw > sw && rh > sh){
 		float fx, fy, fyc, fxc, intp;
 		pixel tr, tl, br, bl;
 		q = malloc(rw*rh*PIXELSIZE);
@@ -158,10 +174,14 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 				fy = ((float)y)*((float)sh)/((float)rh);
 				fxc = modf(fx, &intp);
 				fyc = modf(fy, &intp);
-				tr = src[sw*(int)floor(fy)+(int)ceil(fx)];
+				fxceil = (int)ceil(fx);
+				fyceil = (int)ceil(fy);
+				if (fxceil>=sw) fxceil = sw-1;
+				if (fyceil>=sh) fyceil = sh-1;
+				tr = src[sw*(int)floor(fy)+fxceil];
 				tl = src[sw*(int)floor(fy)+(int)floor(fx)];
-				br = src[sw*(int)ceil(fy)+(int)ceil(fx)];
-				bl = src[sw*(int)ceil(fy)+(int)floor(fx)];
+				br = src[sw*fyceil+fxceil];
+				bl = src[sw*fyceil+(int)floor(fx)];
 				q[rw*y+x] = PIXRGB(
 					(int)(((((float)PIXR(tl))*(1.0f-fxc))+(((float)PIXR(tr))*(fxc)))*(1.0f-fyc) + ((((float)PIXR(bl))*(1.0f-fxc))+(((float)PIXR(br))*(fxc)))*(fyc)),
 					(int)(((((float)PIXG(tl))*(1.0f-fxc))+(((float)PIXG(tr))*(fxc)))*(1.0f-fyc) + ((((float)PIXG(bl))*(1.0f-fxc))+(((float)PIXG(br))*(fxc)))*(fyc)),
@@ -194,10 +214,14 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 					fy = ((float)y)*((float)sh)/((float)rh);
 					fxc = modf(fx, &intp);
 					fyc = modf(fy, &intp);
-					tr = oq[sw*(int)floor(fy)+(int)ceil(fx)];
+					fxceil = (int)ceil(fx);
+					fyceil = (int)ceil(fy);
+					if (fxceil>=sw) fxceil = sw-1;
+					if (fyceil>=sh) fyceil = sh-1;
+					tr = oq[sw*(int)floor(fy)+fxceil];
 					tl = oq[sw*(int)floor(fy)+(int)floor(fx)];
-					br = oq[sw*(int)ceil(fy)+(int)ceil(fx)];
-					bl = oq[sw*(int)ceil(fy)+(int)floor(fx)];
+					br = oq[sw*fyceil+fxceil];
+					bl = oq[sw*fyceil+(int)floor(fx)];
 					q[rw*y+x] = PIXRGB(
 						(int)(((((float)PIXR(tl))*(1.0f-fxc))+(((float)PIXR(tr))*(fxc)))*(1.0f-fyc) + ((((float)PIXR(bl))*(1.0f-fxc))+(((float)PIXR(br))*(fxc)))*(fyc)),
 						(int)(((((float)PIXG(tl))*(1.0f-fxc))+(((float)PIXG(tr))*(fxc)))*(1.0f-fyc) + ((((float)PIXG(bl))*(1.0f-fxc))+(((float)PIXG(br))*(fxc)))*(fyc)),
@@ -632,13 +656,17 @@ void draw_tool(pixel *vid_buf, int b, int sl, int sr, unsigned pc, unsigned iswa
 int draw_tool_xy(pixel *vid_buf, int x, int y, int b, unsigned pc)
 {
 	int i, j, c;
+	pixel gc;
 	if (x > XRES-26 || x < 0)
 		return 26;
 	if (b>=UI_WALLSTART)
 	{
 		int ds = 0;
 		if (b-UI_WALLSTART>=0 && b-UI_WALLSTART<UI_WALLCOUNT)
+		{
 			ds = wtypes[b-UI_WALLSTART].drawstyle;
+			gc = wtypes[b-UI_WALLSTART].eglow;
+		}
 		//x = (2+32*((b-22)/1));
 		//y = YRES+2+40;
 		if (ds==1)
@@ -658,6 +686,17 @@ int draw_tool_xy(pixel *vid_buf, int x, int y, int b, unsigned pc)
 			for (j=1; j<15; j++)
 				for (i=1; i<27; i++)
 					vid_buf[(XRES+BARSIZE)*(y+j)+(x+i)] = pc;
+		}
+		else if (ds==4)
+		{
+			for (j=1; j<15; j++)
+				for (i=1; i<27; i++)
+					if(i%CELL == j%CELL)
+						vid_buf[(XRES+BARSIZE)*(y+j)+(x+i)] = pc;
+					else if  (i%CELL == (j%CELL)+1 || (i%CELL == 0 && j%CELL == CELL-1))
+						vid_buf[(XRES+BARSIZE)*(y+j)+(x+i)] = gc;
+					else 
+						vid_buf[(XRES+BARSIZE)*(y+j)+(x+i)] = PIXPACK(0x202020);
 		}
 		else
 		switch (b)
@@ -1338,6 +1377,26 @@ void draw_air(pixel *vid)
 				for (i=0; i<CELL; i++)
 					vid[(x*CELL+i) + (y*CELL+j)*(XRES+BARSIZE)] = c;
 		}
+}
+
+void draw_grav_zones(pixel * vid)
+{
+	int x, y, i, j;
+	for (y=0; y<YRES/CELL; y++)
+	{
+		for (x=0; x<XRES/CELL; x++)
+		{
+			if(gravmask[y][x])
+			{
+				for (j=0; j<CELL; j++)//draws the colors
+					for (i=0; i<CELL; i++)
+						if(i == j)
+							drawpixel(vid, x*CELL+i, y*CELL+j, 255, 200, 0, 120);
+						else 
+							drawpixel(vid, x*CELL+i, y*CELL+j, 32, 32, 32, 120);
+			}
+		}
+	}
 }
 
 void draw_grav(pixel *vid)
@@ -3162,6 +3221,7 @@ void draw_walls(pixel *vid)
 	int x, y, i, j, cr, cg, cb;
 	unsigned char wt;
 	pixel pc;
+	pixel gc;
 	for (y=0; y<YRES/CELL; y++)
 		for (x=0; x<XRES/CELL; x++)
 			if (bmap[y][x])
@@ -3170,6 +3230,7 @@ void draw_walls(pixel *vid)
 				if (wt<0 || wt>=UI_WALLCOUNT)
 					continue;
 				pc = wtypes[wt].colour;
+				gc = wtypes[wt].eglow;
 
 				// standard wall patterns
 				if (wtypes[wt].drawstyle==1)
@@ -3189,6 +3250,17 @@ void draw_walls(pixel *vid)
 					for (j=0; j<CELL; j++)
 						for (i=0; i<CELL; i++)
 							vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = pc;
+				}
+				else if (wtypes[wt].drawstyle==4)
+				{
+					for (j=0; j<CELL; j++)
+						for (i=0; i<CELL; i++)
+							if(i == j)
+								vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = pc;
+							else if  (i == j+1 || (i == 0 && j == CELL-1))
+								vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = gc;
+							else 
+								vid[(y*CELL+j)*(XRES+BARSIZE)+(x*CELL+i)] = PIXPACK(0x202020);
 				}
 
 				// special rendering for some walls
@@ -3260,7 +3332,17 @@ void draw_walls(pixel *vid)
 							for (i=0; i<CELL; i++)
 								drawblob(vid, (x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
 					}
-
+					else if (wtypes[wt].drawstyle==4)
+					{
+						for (j=0; j<CELL; j++)
+							for (i=0; i<CELL; i++)
+								if(i == j)
+									drawblob(vid, (x*CELL+i), (y*CELL+j), PIXR(pc), PIXG(pc), PIXB(pc));
+								else if  (i == j+1 || (i == 0 && j == CELL-1))
+									drawblob(vid, (x*CELL+i), (y*CELL+j), PIXR(gc), PIXG(gc), PIXB(gc));
+								else 
+									drawblob(vid, (x*CELL+i), (y*CELL+j), 0x20, 0x20, 0x20);
+					}
 					if (bmap[y][x]==WL_EWALL)
 					{
 						if (emap[y][x])
@@ -3598,6 +3680,26 @@ pixel *render_packed_rgb(void *image, int width, int height, int cmp_size)
 
 	free(tmp);
 	return res;
+}
+
+void draw_rgba_image(pixel *vid, unsigned char *data, int x, int y, float alpha)
+{
+	unsigned char w, h;
+	int i, j;
+	unsigned char r, g, b, a;
+	w = *(data++)&0xFF;
+	h = *(data++)&0xFF;
+	for (j=0; j<h; j++)
+	{
+		for (i=0; i<w; i++)
+		{
+			r = *(data++)&0xFF;
+			g = *(data++)&0xFF;
+			b = *(data++)&0xFF;
+			a = *(data++)&0xFF;
+			drawpixel(vid, x+i, y+j, r, g, b, a*alpha);
+		}
+	}
 }
 
 void draw_image(pixel *vid, pixel *img, int x, int y, int w, int h, int a)

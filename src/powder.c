@@ -5,6 +5,8 @@
 #include <air.h>
 #include <misc.h>
 
+int gravwl_timeout = 0;
+
 int isplayer = 0;
 float player[27]; //[0] is a command cell, [3]-[18] are legs positions, [19] is index, [19]-[26] are accelerations
 float player2[27];
@@ -807,6 +809,8 @@ inline int create_part(int p, int x, int y, int t)//the function for creating a 
 	}
 	if (t==PT_DEUT)
 		parts[i].life = 10;
+	if (t==PT_MERC)
+		parts[i].tmp = 10;
 	if (t==PT_BRAY)
 		parts[i].life = 30;
 	if (t==PT_PUMP)
@@ -1922,7 +1926,7 @@ killed:
 						clear_y = (int)(clear_yf+0.5f);
 						break;
 					}
-					if (fin_x<CELL || fin_y<CELL || fin_x>=XRES-CELL || fin_y>=YRES-CELL || pmap[fin_y][fin_x] || (bmap[fin_y/CELL][fin_x/CELL] && !eval_move(t,fin_x,fin_y,NULL)))
+					if (fin_x<CELL || fin_y<CELL || fin_x>=XRES-CELL || fin_y>=YRES-CELL || pmap[fin_y][fin_x] || (bmap[fin_y/CELL][fin_x/CELL] && (bmap[fin_y/CELL][fin_x/CELL]==WL_DESTROYALL || bmap[fin_y/CELL][fin_x/CELL]==WL_DETECT || !eval_move(t,fin_x,fin_y,NULL))))
 					{
 						// found an obstacle
 						clear_xf = fin_xf-dx;
@@ -2435,6 +2439,10 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		b = WL_FANHELPER;
 		dw = 1;
 	}
+	if (wall == WL_GRAV)
+	{
+		gravwl_timeout = 60;
+	}
 	if (dw==1)
 	{
 		rx = rx/CELL;
@@ -2791,4 +2799,90 @@ inline void orbitalparts_set(int *block1, int *block2, int resblock1[], int resb
 	*block1 = block1tmp;
 	*block2 = block2tmp;
 }
-
+void grav_mask_r(int x, int y, char checkmap[YRES/CELL][XRES/CELL], char shape[YRES/CELL][XRES/CELL], char *shapeout)
+{
+	if(x < 0 || x >= XRES/CELL || y < 0 || y >= YRES/CELL)
+		return;
+	if(x == 0 || y ==0 || y == (YRES/CELL)-1 || x == (XRES/CELL)-1)
+		*shapeout = 1;
+	checkmap[y][x] = 1;
+	shape[y][x] = 1;
+	if(x-1 >= 0 && !checkmap[y][x-1] && bmap[y][x-1]!=WL_GRAV)
+		grav_mask_r(x-1, y, checkmap, shape, shapeout);
+	if(y-1 >= 0 && !checkmap[y-1][x] && bmap[y-1][x]!=WL_GRAV)
+		grav_mask_r(x, y-1, checkmap, shape, shapeout);
+	if(x+1 < XRES/CELL && !checkmap[y][x+1] && bmap[y][x+1]!=WL_GRAV)
+		grav_mask_r(x+1, y, checkmap, shape, shapeout);
+	if(y+1 < YRES/CELL && !checkmap[y+1][x] && bmap[y+1][x]!=WL_GRAV)
+		grav_mask_r(x, y+1, checkmap, shape, shapeout);
+	return;
+}
+struct mask_el {
+	char *shape;
+	char shapeout;
+	void *next;
+};
+typedef struct mask_el mask_el;
+void mask_free(mask_el *c_mask_el){
+	if(c_mask_el==NULL)
+		return;
+	if(c_mask_el->next!=NULL)
+		mask_free(c_mask_el->next);
+	free(c_mask_el->shape);
+	free(c_mask_el);
+}
+void gravity_mask()
+{
+	char checkmap[YRES/CELL][XRES/CELL];
+	int x = 0, y = 0;
+	mask_el *t_mask_el = NULL;
+	mask_el *c_mask_el = NULL;
+	memset(checkmap, 0, sizeof(checkmap));
+	for(x = 0; x < XRES/CELL; x++)
+	{
+		for(y = 0; y < YRES/CELL; y++)
+		{
+			if(bmap[y][x]!=WL_GRAV && checkmap[y][x] == 0)
+			{
+				//Create a new shape
+				if(t_mask_el==NULL){
+					t_mask_el = malloc(sizeof(mask_el));
+					t_mask_el->shape = malloc((XRES/CELL)*(YRES/CELL));
+					memset(t_mask_el->shape, 0, (XRES/CELL)*(YRES/CELL));
+					t_mask_el->shapeout = 0;
+					t_mask_el->next = NULL;
+					c_mask_el = t_mask_el;
+				} else {
+					c_mask_el->next = malloc(sizeof(mask_el));
+					c_mask_el = c_mask_el->next;
+					c_mask_el->shape = malloc((XRES/CELL)*(YRES/CELL));
+					memset(c_mask_el->shape, 0, (XRES/CELL)*(YRES/CELL));
+					c_mask_el->shapeout = 0;
+					c_mask_el->next = NULL;
+				}
+				//Fill the shape
+				grav_mask_r(x, y, checkmap, c_mask_el->shape, &c_mask_el->shapeout);
+			}
+		}
+	}
+	c_mask_el = t_mask_el;
+	memset(gravmask, 0, sizeof(gravmask));
+	while(c_mask_el!=NULL)
+	{
+		char *cshape = c_mask_el->shape;
+		for(x = 0; x < XRES/CELL; x++)
+		{
+			for(y = 0; y < YRES/CELL; y++)
+			{
+				if(cshape[y*(XRES/CELL)+x]){
+					if(c_mask_el->shapeout)
+						gravmask[y][x] = 0xFFFFFFFF;
+					else
+						gravmask[y][x] = 0x00000000;
+				}
+			}
+		}
+		c_mask_el = c_mask_el->next;	
+	}
+	mask_free(t_mask_el);
+}
