@@ -1657,7 +1657,10 @@ void update_particles_i(pixel *vid, int start, int inc)
 						}
 					}
 
-					pt = (c_heat+parts[i].temp*96.645/ptypes[t].hconduct*fabs(ptypes[t].weight))/(c_Cm+96.645/ptypes[t].hconduct*fabs(ptypes[t].weight));
+					if (t == PT_PHOT)
+						pt = (c_heat+parts[i].temp*96.645)/(c_Cm+96.645);
+					else
+						pt = (c_heat+parts[i].temp*96.645/ptypes[t].hconduct*fabs(ptypes[t].weight))/(c_Cm+96.645/ptypes[t].hconduct*fabs(ptypes[t].weight));
 					for (j=0; j<8; j++)
 					{
 						parts[surround_hconduct[j]].temp = pt;
