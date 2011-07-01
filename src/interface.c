@@ -16,7 +16,11 @@
 #include <misc.h>
 #include <console.h>
 #include <images.h>
+#if defined(WIN32) && !defined(__GNUC__)
+#include <io.h>
+#else
 #include <dirent.h>
+#endif
 
 SDLMod sdl_mod;
 int sdl_key, sdl_wheel, sdl_caps=0, sdl_ascii, sdl_zoom_trig=0;
@@ -37,6 +41,8 @@ int svf_open = 0;
 int svf_own = 0;
 int svf_myvote = 0;
 int svf_publish = 0;
+char svf_filename[255] = "";
+int svf_fileopen = 0;
 char svf_id[16] = "";
 char svf_name[64] = "";
 char svf_description[255] = "";
@@ -71,6 +77,8 @@ int zoom_x=(XRES-ZSIZE_D)/2, zoom_y=(YRES-ZSIZE_D)/2;
 int zoom_wx=0, zoom_wy=0;
 unsigned char ZFACTOR = 256/ZSIZE_D;
 unsigned char ZSIZE = ZSIZE_D;
+
+int drawgrav_enable = 0;
 
 void menu_count(void)//puts the number of elements in each section into .itemcount
 {
@@ -632,7 +640,7 @@ void draw_svf_ui(pixel *vid_buf, int alternate)// all the buttons at the bottom
 	}
 
 	// the reload button
-	c = svf_open ? 255 : 128;
+	c = (svf_open || svf_fileopen) ? 255 : 128;
 	drawtext(vid_buf, 23, YRES+(MENUSIZE-14), "\x91", c, c, c, 255);
 	drawrect(vid_buf, 19, YRES+(MENUSIZE-16), 16, 14, c, c, c, 255);
 
@@ -641,7 +649,10 @@ void draw_svf_ui(pixel *vid_buf, int alternate)// all the buttons at the bottom
 	{
 		fillrect(vid_buf, 36, YRES+(MENUSIZE-16)-1, 152, 16, 255, 255, 255, 255);
 		drawtext(vid_buf, 40, YRES+(MENUSIZE-14), "\x82", 0, 0, 0, 255);
-		drawtext(vid_buf, 58, YRES+(MENUSIZE-12), "[save to disk]", 0, 0, 0, 255);
+		if(svf_fileopen)
+			drawtext(vid_buf, 58, YRES+(MENUSIZE-12), svf_filename, 0, 0, 0, 255);
+		else
+			drawtext(vid_buf, 58, YRES+(MENUSIZE-12), "[save to disk]", 0, 0, 0, 255);
 	} else {
 		c = svf_login ? 255 : 128;
 		drawtext(vid_buf, 40, YRES+(MENUSIZE-14), "\x82", c, c, c, 255);
@@ -1662,6 +1673,8 @@ int save_name_ui(pixel *vid_buf)
 			svf_open = 1;
 			svf_own = 1;
 			svf_publish = cb.checked;
+			svf_filename[0] = 0;
+			svf_fileopen = 0;
 			free(old_vid);
 			return nd+1;
 		}
@@ -2998,6 +3011,7 @@ int search_ui(pixel *vid_buf)
 				page_count = search_results(results, last_own||svf_admin||svf_mod);
 				memset(thumb_drawn, 0, sizeof(thumb_drawn));
 				memset(v_buf, 0, ((YRES+MENUSIZE)*(XRES+BARSIZE))*PIXELSIZE);
+				nmp = -1;
 			
 				ui_richtext_settext(server_motd, &motd);
 				motd.x = (XRES-textwidth(motd.printstr))/2;
@@ -3623,12 +3637,16 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 						svf_tags[0] = 0;
 					}
 					svf_myvote = info->myvote;
+					svf_filename[0] = 0;
+					svf_fileopen = 0;
 					retval = 1;
 					break;
 				} else {
 					queue_open = 0;
 
 					svf_open = 0;
+					svf_filename[0] = 0;
+					svf_fileopen = 0;
 					svf_publish = 0;
 					svf_own = 0;
 					svf_myvote = 0;
@@ -5073,6 +5091,10 @@ unsigned int decorations_ui(pixel *vid_buf,int *bsx,int *bsy, unsigned int saved
 					*bsy = 0;
 			}
 		}
+		if (sdl_key==SDLK_TAB)
+		{
+			CURRENT_BRUSH =(CURRENT_BRUSH + 1)%BRUSH_NUM ;
+		}
 
 		if (!sdl_zoom_trig && zoom_en==1)
 		{
@@ -5104,9 +5126,26 @@ typedef struct savelist_e savelist_e;
 savelist_e *get_local_saves(char *folder, char *search, int *results_ret)
 {
 	int index = 0, results = 0;
-	struct dirent *derp;
 	savelist_e *new_savelist = NULL;
-	savelist_e *current_item = NULL;
+	savelist_e *current_item = NULL, *new_item = NULL;
+	char *fname;
+#if defined(WIN32) && !defined(__GNUC__)
+	struct _finddata_t current_file;
+	intptr_t findfile_handle;
+	char *filematch = malloc(strlen(folder)+4);
+	sprintf(filematch, "%s%s", folder, "*.*");
+	findfile_handle = _findfirst(filematch, &current_file);
+	free(filematch);
+	if (findfile_handle == -1L)
+	{
+		*results_ret = 0;
+		return NULL;
+	}
+	do
+	{
+		fname = current_file.name;
+#else
+	struct dirent *derp;
 	DIR *directory = opendir(folder);
 	if(!directory)
 	{
@@ -5114,39 +5153,40 @@ savelist_e *get_local_saves(char *folder, char *search, int *results_ret)
 		*results_ret = 0;
 		return NULL;
 	}
-	while(derp = readdir(directory)){
-		char *ext;
-		if(strlen(derp->d_name)>4)
+	while(derp = readdir(directory))
+	{
+		fname = derp->d_name;
+#endif
+		if(strlen(fname)>4)
 		{
-			ext = derp->d_name+(strlen(derp->d_name)-4);
-			if((!strncmp(ext, ".cps", 4) || !strncmp(ext, ".stm", 4)) && (search==NULL || strstr(derp->d_name, search)))
+			char *ext = fname+(strlen(fname)-4);
+			if((!strncmp(ext, ".cps", 4) || !strncmp(ext, ".stm", 4)) && (search==NULL || strstr(fname, search)))
 			{
+				new_item = malloc(sizeof(savelist_e));
+				new_item->filename = malloc(strlen(folder)+strlen(fname)+1);
+				sprintf(new_item->filename, "%s%s", folder, fname);
+				new_item->name = mystrdup(fname);
+				new_item->image = NULL;
+				new_item->next = NULL;
 				if(new_savelist==NULL){
-					new_savelist = malloc(sizeof(savelist_e));
-					new_savelist->filename = malloc(strlen(folder)+strlen(derp->d_name)+1);
-					sprintf(new_savelist->filename, "%s%s", folder, derp->d_name);
-					new_savelist->name = mystrdup(derp->d_name);
-					new_savelist->image = NULL;
-					new_savelist->next = NULL;
-					new_savelist->prev = NULL;
-					current_item = new_savelist;
+					new_savelist = new_item;
+					new_item->prev = NULL;
 				} else {
-					savelist_e *prev_item = current_item;
-					current_item->next = malloc(sizeof(savelist_e));
-					current_item = current_item->next;
-					current_item->filename = malloc(strlen(folder)+strlen(derp->d_name)+1);
-					sprintf(current_item->filename, "%s%s", folder, derp->d_name);
-					current_item->name = mystrdup(derp->d_name);
-					current_item->image = NULL;
-					current_item->next = NULL;
-					current_item->prev = prev_item;
+					current_item->next = new_item;
+					new_item->prev = current_item;
 				}
+				current_item = new_item;
 				results++;
 			}
 		}
 	}
-	*results_ret = results;
+#if defined(WIN32) && !defined(__GNUC__)
+	while (_findnext(findfile_handle, &current_file) == 0);
+	_findclose(findfile_handle);
+#else
 	closedir(directory);
+#endif
+	*results_ret = results;
 	return new_savelist;
 }
 
@@ -5189,9 +5229,19 @@ int save_filename_ui(pixel *vid_buf)
 	ed.def = "[filename]";
 	ed.focus = 1;
 	ed.hide = 0;
-	ed.cursor = strlen(svf_name);
+	ed.cursor = 0;
 	ed.multiline = 0;
-	strcpy(ed.str, "");
+	ed.str[0] = 0;
+	
+	if(svf_fileopen){
+		char * dotloc = NULL;
+		strncpy(ed.str, svf_filename, 255);
+		if(dotloc = strstr(ed.str, "."))
+		{
+			dotloc[0] = 0;
+		}
+		ed.cursor = strlen(ed.str);
+	}
 
 	while (!sdl_poll())
 	{
@@ -5212,7 +5262,6 @@ int save_filename_ui(pixel *vid_buf)
 		mx /= sdl_scale;
 		my /= sdl_scale;
 
-		b = SDL_GetMouseState(&mx, &my);
 		clearrect(vid_buf, x0-2, y0-2, xsize+4, ysize+4);
 		drawrect(vid_buf, x0, y0, xsize, ysize, 192, 192, 192, 255);
 		drawtext(vid_buf, x0+8, y0+8, "Filename:", 255, 255, 255, 255);
@@ -5238,8 +5287,10 @@ int save_filename_ui(pixel *vid_buf)
 			if(b && !bq)
 			{
 				FILE *f = NULL;
+				char *savefname = malloc(strlen(ed.str)+5);
 				char *filename = malloc(strlen(LOCAL_SAVE_DIR)+strlen(PATH_SEP)+strlen(ed.str)+5);
 				sprintf(filename, "%s%s%s.cps", LOCAL_SAVE_DIR, PATH_SEP, ed.str);
+				sprintf(savefname, "%s.cps", ed.str);
 			
 #ifdef WIN32
 				_mkdir(LOCAL_SAVE_DIR);
@@ -5259,6 +5310,11 @@ int save_filename_ui(pixel *vid_buf)
 					{
 						fwrite(save_data, save_size, 1, f);
 						fclose(f);
+						if(svf_fileopen)
+						{
+							strncpy(svf_filename, savefname, 255);
+							svf_fileopen = 1;
+						}
 						break;
 					} else {
 						error_ui(vid_buf, 0, "Unable to write to save file.");
@@ -5302,6 +5358,7 @@ void catalogue_ui(pixel * vid_buf)
 	float scrollvel, offsetf = 0.0f;
 	char savetext[128] = "";
 	char * last = mystrdup("");
+	savelist_e *saves, *cssave, *csave;
 	ui_edit ed;
 	
 	vid_buf2 = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
@@ -5317,9 +5374,8 @@ void catalogue_ui(pixel * vid_buf)
 	ed.nx = 0;
 	strcpy(ed.str, "");
 
-	savelist_e *saves = get_local_saves(LOCAL_SAVE_DIR PATH_SEP, NULL, &rescount);
-	savelist_e *cssave = saves;
-	savelist_e *csave = saves;
+	saves = get_local_saves(LOCAL_SAVE_DIR PATH_SEP, NULL, &rescount);
+	cssave = csave = saves;
 	while (!sdl_poll())
 	{
 		b = SDL_GetMouseState(&mx, &my);
@@ -5331,6 +5387,8 @@ void catalogue_ui(pixel * vid_buf)
 	while (!sdl_poll())
 	{
 		b = SDL_GetMouseState(&mx, &my);
+		mx /= sdl_scale;
+		my /= sdl_scale;
 		sprintf(savetext, "Found %d save%s", rescount, rescount==1?"":"s");
 		clearrect(vid_buf, x0-2, y0-2, xsize+4, ysize+4);
 		clearrect(vid_buf2, x0-2, y0-2, xsize+4, ysize+4);
@@ -5420,6 +5478,9 @@ void catalogue_ui(pixel * vid_buf)
 							status = parse_save(data, size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 							if(!status)
 							{
+								//svf_filename[0] = 0;
+								strncpy(svf_filename, csave->name, 255);
+								svf_fileopen = 1;
 								svf_open = 0;
 								svf_publish = 0;
 								svf_own = 0;
@@ -5428,9 +5489,13 @@ void catalogue_ui(pixel * vid_buf)
 								svf_name[0] = 0;
 								svf_description[0] = 0;
 								svf_tags[0] = 0;
+								svf_last = data;
+								data = NULL;
+								svf_lsize = size;
 								goto openfin;
 							} else {
 								error_ui(vid_buf, 0, "Save data corrupt");
+								free(data);
 							}
 						} else {
 							error_ui(vid_buf, 0, "Unable to read save file");

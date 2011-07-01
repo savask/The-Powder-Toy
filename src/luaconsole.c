@@ -32,6 +32,10 @@ void luacon_open(){
 		{"unregister_step", &luatpt_unregister_step},
 		{"input", &luatpt_input},
 		{"message_box", &luatpt_message_box},
+		{"get_numOfParts", &luatpt_get_numOfParts},
+		{"start_getPartIndex", &luatpt_start_getPartIndex},
+		{"next_getPartIndex", &luatpt_next_getPartIndex},
+		{"getPartIndex", &luatpt_getPartIndex},
 		{NULL,NULL}
 	};
 
@@ -63,7 +67,7 @@ int luacon_step(int mx, int my, int mb, int mbq, char key){
 				if(lua_isboolean(l, -1)){
 					tempb = lua_toboolean(l, -1);
 					if(tempb){	//Mouse click has been handled, set the global for future calls
-						lua_pushinteger(l, mb);	
+						lua_pushinteger(l, mb);
 						lua_setfield(l, LUA_GLOBALSINDEX, "mouseb");
 					}
 					tempret |= tempb;
@@ -81,7 +85,7 @@ int luacon_eval(char *command){
 char *luacon_geterror(){
 	char *error = lua_tostring(l, -1);
 	if(error==NULL || !error[0]){
-		error = "failed to execute";	
+		error = "failed to execute";
 	}
 	return error;
 }
@@ -151,7 +155,7 @@ int luatpt_drawtext(lua_State* l)
 	if (textalpha>255) textalpha = 255;
 	if(vid_buf!=NULL){
 		drawtext(vid_buf, textx, texty, string, textred, textgreen, textblue, textalpha);
-		return 0;	
+		return 0;
 	}
 	return luaL_error(l, "Screen buffer does not exist");
 }
@@ -177,7 +181,7 @@ int luatpt_create(lua_State* l)
 		retid = create_part(-1, x, y, t);
 		// failing to create a particle often happens (e.g. if space is already occupied) and isn't usually important, so don't raise an error
 		lua_pushinteger(l, retid);
-		return 1;	
+		return 1;
 	}
 	return luaL_error(l, "Coordinates out of range (%d,%d)", x, y);
 }
@@ -225,12 +229,12 @@ int luatpt_set_pressure(lua_State* l)
 	if(value > 256.0f)
 		value = 256.0f;
 	else if(value < -256.0f)
-		value = -256.0f;	
-	
+		value = -256.0f;
+
 	if(x1 > (XRES/CELL)-1)
 		x1 = (XRES/CELL)-1;
-	if(y1 > (YRES/CELL)-1) 
-		y1 = (YRES/CELL)-1;	
+	if(y1 > (YRES/CELL)-1)
+		y1 = (YRES/CELL)-1;
 	if(x1+width > (XRES/CELL)-1)
 		width = (XRES/CELL)-x1;
 	if(y1+height > (YRES/CELL)-1)
@@ -256,12 +260,12 @@ int luatpt_set_gravity(lua_State* l)
 	if(value > 256.0f)
 		value = 256.0f;
 	else if(value < -256.0f)
-		value = -256.0f;	
-	
+		value = -256.0f;
+
 	if(x1 > (XRES/CELL)-1)
 		x1 = (XRES/CELL)-1;
-	if(y1 > (YRES/CELL)-1) 
-		y1 = (YRES/CELL)-1;	
+	if(y1 > (YRES/CELL)-1)
+		y1 = (YRES/CELL)-1;
 	if(x1+width > (XRES/CELL)-1)
 		width = (XRES/CELL)-x1;
 	if(y1+height > (YRES/CELL)-1)
@@ -284,8 +288,8 @@ int luatpt_reset_gravity_field(lua_State* l)
 	height = abs(luaL_optint(l, 4, YRES/CELL));
 	if(x1 > (XRES/CELL)-1)
 		x1 = (XRES/CELL)-1;
-	if(y1 > (YRES/CELL)-1) 
-		y1 = (YRES/CELL)-1;	
+	if(y1 > (YRES/CELL)-1)
+		y1 = (YRES/CELL)-1;
 	if(x1+width > (XRES/CELL)-1)
 		width = (XRES/CELL)-x1;
 	if(y1+height > (YRES/CELL)-1)
@@ -309,8 +313,8 @@ int luatpt_reset_velocity(lua_State* l)
 	height = abs(luaL_optint(l, 4, YRES/CELL));
 	if(x1 > (XRES/CELL)-1)
 		x1 = (XRES/CELL)-1;
-	if(y1 > (YRES/CELL)-1) 
-		y1 = (YRES/CELL)-1;	
+	if(y1 > (YRES/CELL)-1)
+		y1 = (YRES/CELL)-1;
 	if(x1+width > (XRES/CELL)-1)
 		width = (XRES/CELL)-x1;
 	if(y1+height > (YRES/CELL)-1)
@@ -341,7 +345,7 @@ int luatpt_reset_spark(lua_State* l)
 int luatpt_set_property(lua_State* l)
 {
 	char *prop, *name;
-	int i, x, y, w, h, t, format, nx, ny, partsel = 0, acount;
+	int r, i, x, y, w, h, t, format, nx, ny, partsel = 0, acount;
 	float f;
 	size_t offset;
 	acount = lua_gettop(l);
@@ -370,7 +374,7 @@ int luatpt_set_property(lua_State* l)
 		format = 1;
 	} else if (strcmp(prop,"ctype")==0){
 		offset = offsetof(particle, ctype);
-		format = 3;
+		format = 4;
 	} else if (strcmp(prop,"temp")==0){
 		offset = offsetof(particle, temp);
 		format = 2;
@@ -405,8 +409,6 @@ int luatpt_set_property(lua_State* l)
 		} else {
 			t = luaL_optint(l, 2, 0);
 		}
-		if (format == 3 && t==OLD_PT_WIND)
-			return 0;
 		if (format == 3 && (t<0 || t>=PT_NUM))
 			return luaL_error(l, "Unrecognised element number '%d'", t);
 	} else {
@@ -431,9 +433,14 @@ int luatpt_set_property(lua_State* l)
 			h = YRES-y;
 		for (nx = x; nx<x+w; nx++)
 			for (ny = y; ny<y+h; ny++){
-				i = pmap[ny][nx]>>8;
-				if (i < 0 || i >= NPART || (partsel && partsel != parts[i].type))
-					continue;
+				r = pmap[ny][nx];
+				if (!r || (r>>8) >= NPART || (partsel && partsel != parts[r>>8].type))
+				{
+					r = photons[ny][nx];
+					if (!r || (partsel && partsel != parts[r>>8].type))
+						continue;
+				}
+				i = r>>8;
 				if(format==2){
 					*((float*)(((void*)&parts[i])+offset)) = f;
 				} else {
@@ -445,12 +452,15 @@ int luatpt_set_property(lua_State* l)
 		if(i != -1 && y != -1){
 			if (i>=XRES || y>=YRES)
 				return luaL_error(l, "Coordinates out of range (%d,%d)", i, y);
-			i = pmap[y][i]>>8;
-			if (i >= NPART)
-				return 0;
+			r = pmap[y][i];
+			if (!r || (r>>8)>=NPART || (partsel && partsel != parts[r>>8].type))
+				r = photons[y][i];
+			i = r>>8;
 		}
 		if (i < 0 || i >= NPART)
 			return luaL_error(l, "Invalid particle ID '%d'", i);
+		if (!parts[i].type)
+			return 0;
 		if (partsel && partsel != parts[i].type)
 			return 0;
 		if(format==2){
@@ -464,15 +474,16 @@ int luatpt_set_property(lua_State* l)
 
 int luatpt_get_property(lua_State* l)
 {
-	int i, y;
+	int i, r, y;
 	char *prop;
 	prop = luaL_optstring(l, 1, "");
-	i = abs(luaL_optint(l, 2, 0));
-	y = abs(luaL_optint(l, 3, -1));
+	i = luaL_optint(l, 2, 0);
+	y = luaL_optint(l, 3, -1);
 	if(y!=-1 && y < YRES && y >= 0 && i < XRES && i >= 0){
-		i = pmap[y][i]>>8;
-		if (i >= NPART)
-			return 0;
+		r = pmap[y][i];
+		if (!r || (r>>8)>=NPART)
+			r = photons[y][i];
+		i = r>>8;
 	}
 	else if (y!=-1)
 		return luaL_error(l, "Coordinates out of range (%d,%d)", i, y);
@@ -745,5 +756,44 @@ int luatpt_message_box(lua_State* l)
 	free(title);
 	free(text);
 	return luaL_error(l, "Screen buffer does not exist");;
+}
+int luatpt_get_numOfParts(lua_State* l)
+{
+    lua_pushinteger(l, NUM_PARTS);
+    return 1;
+}
+int luatpt_start_getPartIndex(lua_State* l)
+{
+    getPartIndex_curIdx = -1;
+    return 1;
+}
+int luatpt_next_getPartIndex(lua_State* l)
+{
+    while(1)
+    {
+        getPartIndex_curIdx++;
+        if(getPartIndex_curIdx >= NPART)
+        {
+            getPartIndex_curIdx = 0;
+            lua_pushboolean(l, 0);
+            return 1;
+        }
+        if(parts[getPartIndex_curIdx].type)
+            break;
+
+    }
+
+    lua_pushboolean(l, 1);
+    return 1;
+}
+int luatpt_getPartIndex(lua_State* l)
+{
+    if(getPartIndex_curIdx < 0)
+    {
+        lua_pushinteger(l, 0);
+        return 1;
+    }
+    lua_pushinteger(l, getPartIndex_curIdx);
+    return 1;
 }
 #endif

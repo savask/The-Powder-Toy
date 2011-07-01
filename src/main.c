@@ -533,8 +533,9 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 	unsigned char *d=NULL,*c=save;
 	int q,i,j,k,x,y,p=0,*m=NULL, ver, pty, ty, legacy_beta=0, tempGrav = 0;
 	int bx0=x0/CELL, by0=y0/CELL, bw, bh, w, h;
-	int fp[NPART], nf=0, new_format = 0, ttv = 0;
+	int nf=0, new_format = 0, ttv = 0;
 	particle *parts = partsptr;
+	int *fp = malloc(NPART*sizeof(int));
 
 	//New file header uses PSv, replacing fuC. This is to detect if the client uses a new save format for temperatures
 	//This creates a problem for old clients, that display and "corrupt" error instead of a "newer version" error
@@ -566,7 +567,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				airMode = ((c[3]>>4)&0x07);// | ((c[3]>>4)&0x02) | ((c[3]>>4)&0x01);
 			}
 			if (ver>=49 && replace) {
-				tempGrav = ((c[3]>>7)&0x01);			
+				tempGrav = ((c[3]>>7)&0x01);		
 			}
 		} else {
 			if (c[3]==1||c[3]==0) {
@@ -727,7 +728,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 					if (j == PT_PHOT)
 						parts[fp[i]].ctype = 0x3fffffff;
 					if (j == PT_SOAP)
-						parts[k].ctype = 0;
+						parts[fp[i]].ctype = 0;
 					parts[fp[i]].x = (float)x;
 					parts[fp[i]].y = (float)y;
 					m[(x-x0)+(y-y0)*w] = fp[i]+1;
@@ -1046,12 +1047,14 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 version1:
 	if (m) free(m);
 	if (d) free(d);
+	if (fp) free(fp);
 
 	return 0;
 
 corrupt:
 	if (m) free(m);
 	if (d) free(d);
+	if (fp) free(fp);
 	if (replace)
 	{
 		legacy_enable = 0;
@@ -1801,7 +1804,7 @@ int main(int argc, char *argv[])
 		if (bsy<0)
 			bsy = 0;
 		
-		if(ngrav_enable)
+		if(ngrav_enable && drawgrav_enable)
 			draw_grav(vid_buf);
 		draw_walls(vid_buf); 
 		update_particles(vid_buf); //update everything
@@ -1830,6 +1833,11 @@ int main(int argc, char *argv[])
 
 		if (!sys_pause||framerender) //Only update if not paused
 			memset(gravmap, 0, sizeof(gravmap)); //Clear the old gravmap
+
+		if (framerender) {
+			framerender = 0;
+			sys_pause = 1;
+		}
 
 		if (cmode==CM_PERS)
 		{
@@ -2216,10 +2224,17 @@ int main(int argc, char *argv[])
 			}
 			if (sdl_key=='g')
 			{
-				if (sdl_mod & (KMOD_SHIFT))
-					GRID_MODE = (GRID_MODE+9)%10;
+				if(sdl_mod & (KMOD_CTRL))
+				{
+					drawgrav_enable =! drawgrav_enable;
+				}
 				else
-					GRID_MODE = (GRID_MODE+1)%10;
+				{
+					if (sdl_mod & (KMOD_SHIFT))
+						GRID_MODE = (GRID_MODE+9)%10;
+					else
+						GRID_MODE = (GRID_MODE+1)%10;
+				}
 			}
 			if (sdl_key=='m')
 			{
@@ -2399,6 +2414,7 @@ int main(int argc, char *argv[])
 						vx[cby][cbx] = cb_vx[cby][cbx];
 						vy[cby][cbx] = cb_vy[cby][cbx];
 						pv[cby][cbx] = cb_pv[cby][cbx];
+						hv[cby][cbx] = cb_hv[cby][cbx];
 						bmap[cby][cbx] = cb_bmap[cby][cbx];
 						emap[cby][cbx] = cb_emap[cby][cbx];
 					}
@@ -2499,7 +2515,7 @@ int main(int argc, char *argv[])
 		b = SDL_GetMouseState(&x, &y); // b is current mouse state
 
 #ifdef LUACONSOLE
-		if(luacon_step(x, y, b, bq, sdl_key))
+		if(luacon_step(x/sdl_scale, y/sdl_scale, b, bq, sdl_key))
 			b = 0; //Mouse click was handled by Lua step
 #endif
 
@@ -2866,6 +2882,8 @@ int main(int argc, char *argv[])
 						pfree = 0;
 
 						legacy_enable = 0;
+						svf_filename[0] = 0;
+						svf_fileopen = 0;
 						svf_myvote = 0;
 						svf_open = 0;
 						svf_publish = 0;
@@ -2931,7 +2949,7 @@ int main(int argc, char *argv[])
 							memset(fire_b, 0, sizeof(fire_b));
 						}
 					}
-					if (x>=19 && x<=35 && svf_last && svf_open && !bq) {
+					if (x>=19 && x<=35 && svf_last && (svf_open || svf_fileopen) && !bq) {
 						//int tpval = sys_pause;
 						parse_save(svf_last, svf_lsize, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
 						//sys_pause = tpval;
@@ -3121,6 +3139,7 @@ int main(int argc, char *argv[])
 								cb_vx[cby][cbx] = vx[cby][cbx];
 								cb_vy[cby][cbx] = vy[cby][cbx];
 								cb_pv[cby][cbx] = pv[cby][cbx];
+								cb_hv[cby][cbx] = hv[cby][cbx];
 								cb_bmap[cby][cbx] = bmap[cby][cbx];
 								cb_emap[cby][cbx] = emap[cby][cbx];
 							}
@@ -3460,14 +3479,14 @@ int main(int argc, char *argv[])
 		//Setting an element for the stick man
 		if (isplayer==0)
 		{
-			if (ptypes[sr].falldown>0 || sr == PT_NEUT || sr == PT_PHOT)
+			if ((sr<PT_NUM && ptypes[sr].falldown>0) || sr==SPC_AIR || sr == PT_NEUT || sr == PT_PHOT)
 				player[2] = sr;
 			else
 				player[2] = PT_DUST;
 		}
 		if (isplayer2==0)
 		{
-			if (ptypes[sr].falldown>0 || sr == PT_NEUT || sr == PT_PHOT)
+			if ((sr<PT_NUM && ptypes[sr].falldown>0) || sr==SPC_AIR || sr == PT_NEUT || sr == PT_PHOT)
 				player2[2] = sr;
 			else
 				player2[2] = PT_DUST;

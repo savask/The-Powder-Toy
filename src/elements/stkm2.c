@@ -15,6 +15,10 @@ int update_STKM2(UPDATE_FUNC_ARGS) {
 	int r, rx, ry;
 	float pp, d;
 	float dt = 0.9;///(FPSB*FPSB);  //Delta time in square
+
+	if ((parts[i].ctype>0 && parts[i].ctype<PT_NUM && ptypes[parts[i].ctype].falldown>0) || parts[i].ctype==SPC_AIR || parts[i].ctype == PT_NEUT || parts[i].ctype == PT_PHOT)
+		player2[2] = parts[i].ctype;
+
 	//Tempirature handling
 	if (parts[i].temp<243)
 		parts[i].life -= 1;
@@ -211,7 +215,8 @@ int update_STKM2(UPDATE_FUNC_ARGS) {
 
 				if ((r&0xFF) == PT_NEUT)
 				{
-					parts[i].life -= (102-parts[i].life)/2;
+					if (parts[i].life<=100) parts[i].life -= (102-parts[i].life)/2;
+					else parts[i].life *= 0.9f;
 					kill_part(r>>8);
 				}
 				if (bmap[(ry+y)/CELL][(rx+x)/CELL]==WL_FAN)
@@ -419,6 +424,7 @@ int update_STKM2(UPDATE_FUNC_ARGS) {
 		parts[i].life -= 1;
 
 	isplayer2 = 1;
+	parts[i].ctype = player2[2];
 	return 0;
 }
 

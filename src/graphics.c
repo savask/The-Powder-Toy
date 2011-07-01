@@ -163,7 +163,8 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 		q = malloc(rw*rh*PIXELSIZE);
 		memcpy(q, src, rw*rh*PIXELSIZE);
 	} else if(rw > sw && rh > sh){
-		float fx, fy, fyc, fxc, intp;
+		float fx, fy, fyc, fxc;
+		double intp;
 		pixel tr, tl, br, bl;
 		q = malloc(rw*rh*PIXELSIZE);
 		//Bilinear interpolation for upscaling
@@ -172,8 +173,8 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 			{
 				fx = ((float)x)*((float)sw)/((float)rw);
 				fy = ((float)y)*((float)sh)/((float)rh);
-				fxc = modff(fx, &intp);
-				fyc = modff(fy, &intp);
+				fxc = modf(fx, &intp);
+				fyc = modf(fy, &intp);
 				fxceil = (int)ceil(fx);
 				fyceil = (int)ceil(fy);
 				if (fxceil>=sw) fxceil = sw-1;
@@ -190,7 +191,8 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 			}
 	} else {
 		//Stairstepping
-		float fx, fy, fyc, fxc, intp;
+		float fx, fy, fyc, fxc;
+		double intp;
 		pixel tr, tl, br, bl;
 		int rrw = rw, rrh = rh;
 		pixel * oq;
@@ -212,8 +214,8 @@ pixel *resample_img(pixel *src, int sw, int sh, int rw, int rh)
 				{
 					fx = ((float)x)*((float)sw)/((float)rw);
 					fy = ((float)y)*((float)sh)/((float)rh);
-					fxc = modff(fx, &intp);
-					fyc = modff(fy, &intp);
+					fxc = modf(fx, &intp);
+					fyc = modf(fy, &intp);
 					fxceil = (int)ceil(fx);
 					fyceil = (int)ceil(fy);
 					if (fxceil>=sw) fxceil = sw-1;
@@ -282,11 +284,33 @@ void sdl_blit_1(int x, int y, int w, int h, pixel *src, int pitch)
 		if (SDL_LockSurface(sdl_scrn)<0)
 			return;
 	dst=(pixel *)sdl_scrn->pixels+y*sdl_scrn->pitch/PIXELSIZE+x;
-	for (j=0; j<h; j++)
+	if (SDL_MapRGB(sdl_scrn->format,0x33,0x55,0x77)!=PIXPACK(0x335577))
 	{
-		memcpy(dst, src, w*PIXELSIZE);
-		dst+=sdl_scrn->pitch/PIXELSIZE;
-		src+=pitch;
+		//pixel format conversion
+		int i;
+		pixel px;
+		SDL_PixelFormat *fmt = sdl_scrn->format;
+		for (j=0; j<h; j++)
+		{
+			for (i=0; i<w; i++)
+			{
+				px = src[i];
+				dst[i] = ((PIXR(px)>>fmt->Rloss)<<fmt->Rshift)|
+						((PIXG(px)>>fmt->Gloss)<<fmt->Gshift)|
+						((PIXB(px)>>fmt->Bloss)<<fmt->Bshift);
+			}
+			dst+=sdl_scrn->pitch/PIXELSIZE;
+			src+=pitch;
+		}
+	}
+	else
+	{
+		for (j=0; j<h; j++)
+		{
+			memcpy(dst, src, w*PIXELSIZE);
+			dst+=sdl_scrn->pitch/PIXELSIZE;
+			src+=pitch;
+		}
 	}
 	if (SDL_MUSTLOCK(sdl_scrn))
 		SDL_UnlockSurface(sdl_scrn);
@@ -302,18 +326,44 @@ void sdl_blit_2(int x, int y, int w, int h, pixel *src, int pitch)
 		if (SDL_LockSurface(sdl_scrn)<0)
 			return;
 	dst=(pixel *)sdl_scrn->pixels+y*sdl_scrn->pitch/PIXELSIZE+x;
-	for (j=0; j<h; j++)
+	if (SDL_MapRGB(sdl_scrn->format,0x33,0x55,0x77)!=PIXPACK(0x335577))
 	{
-		for (k=0; k<sdl_scale; k++)
+		//pixel format conversion
+		pixel px;
+		SDL_PixelFormat *fmt = sdl_scrn->format;
+		for (j=0; j<h; j++)
 		{
-			for (i=0; i<w; i++)
+			for (k=0; k<sdl_scale; k++)
 			{
-				dst[i*2]=src[i];
-				dst[i*2+1]=src[i];
+				for (i=0; i<w; i++)
+				{
+					px = src[i];
+					px = ((PIXR(px)>>fmt->Rloss)<<fmt->Rshift)|
+						((PIXG(px)>>fmt->Gloss)<<fmt->Gshift)|
+						((PIXB(px)>>fmt->Bloss)<<fmt->Bshift);
+					dst[i*2]=px;
+					dst[i*2+1]=px;
+				}
+				dst+=sdl_scrn->pitch/PIXELSIZE;
 			}
-			dst+=sdl_scrn->pitch/PIXELSIZE;
+			src+=pitch;
 		}
-		src+=pitch;
+	}
+	else
+	{
+		for (j=0; j<h; j++)
+		{
+			for (k=0; k<sdl_scale; k++)
+			{
+				for (i=0; i<w; i++)
+				{
+					dst[i*2]=src[i];
+					dst[i*2+1]=src[i];
+				}
+				dst+=sdl_scrn->pitch/PIXELSIZE;
+			}
+			src+=pitch;
+		}
 	}
 	if (SDL_MUSTLOCK(sdl_scrn))
 		SDL_UnlockSurface(sdl_scrn);
@@ -1640,6 +1690,9 @@ void draw_parts(pixel *vid)
 			nx = (int)(parts[i].x+0.5f);
 			ny = (int)(parts[i].y+0.5f);
 
+			if(photons[ny][nx]&0xFF && !(ptypes[t].properties & TYPE_ENERGY))
+				continue;
+
 			if (t==PT_SOAP)
 			{
 				if ((parts[i].ctype&7) == 7)
@@ -1650,7 +1703,8 @@ void draw_parts(pixel *vid)
 			{
 				if (t==PT_STKM) //Just draw head here
 				{
-					char buff[10];  //Buffer for HP
+					char buff[20];  //Buffer for HP
+					pixel pc;
 
 					if (mousex>(nx-3) && mousex<(nx+3) && mousey<(ny+3) && mousey>(ny-3)) //If mous is in the head
 					{
@@ -1658,13 +1712,15 @@ void draw_parts(pixel *vid)
 						drawtext(vid, mousex-8-2*(parts[i].life<100)-2*(parts[i].life<10), mousey-12, buff, 255, 255, 255, 255);
 					}
 
+					if ((int)player[2]<PT_NUM) pc = ptypes[(int)player[2]].pcolors;
+					else pc = PIXPACK(0xFFFFFF);
 					for (r=-2; r<=1; r++) //Here I use r variable not as I should, but I think you will excuse me :-p
 					{
 						s = XRES+BARSIZE;
-						vid[(ny-2)*s+nx+r] = ptypes[(int)player[2]].pcolors;
-						vid[(ny+2)*s+nx+r+1] = ptypes[(int)player[2]].pcolors;
-						vid[(ny+r+1)*s+nx-2] = ptypes[(int)player[2]].pcolors;
-						vid[(ny+r)*s+nx+2] = ptypes[(int)player[2]].pcolors;
+						vid[(ny-2)*s+nx+r] = pc;
+						vid[(ny+2)*s+nx+r+1] = pc;
+						vid[(ny+r+1)*s+nx-2] = pc;
+						vid[(ny+r)*s+nx+2] = pc;
 					}
 					draw_line(vid , nx, ny+3, player[3], player[4], 255, 255, 255, s);
 					draw_line(vid , player[3], player[4], player[7], player[8], 255, 255, 255, s);
@@ -1675,7 +1731,8 @@ void draw_parts(pixel *vid)
 				}
 				else if (t==PT_STKM2) //Just draw head here
 				{
-					char buff[10];  //Buffer for HP
+					char buff[20];  //Buffer for HP
+					pixel pc;
 
 					if (mousex>(nx-3) && mousex<(nx+3) && mousey<(ny+3) && mousey>(ny-3)) //If mous is in the head
 					{
@@ -1683,13 +1740,15 @@ void draw_parts(pixel *vid)
 						drawtext(vid, mousex-8-2*(parts[i].life<100)-2*(parts[i].life<10), mousey-12, buff, 255, 255, 255, 255);
 					}
 
+					if ((int)player2[2]<PT_NUM) pc = ptypes[(int)player2[2]].pcolors;
+					else pc = PIXPACK(0xFFFFFF);
 					for (r=-2; r<=1; r++) //Here I use r variable not as I should, but I think you will excuse me :-p
 					{
 						s = XRES+BARSIZE;
-						vid[(ny-2)*s+nx+r] = ptypes[(int)player2[2]].pcolors;
-						vid[(ny+2)*s+nx+r+1] = ptypes[(int)player2[2]].pcolors;
-						vid[(ny+r+1)*s+nx-2] = ptypes[(int)player2[2]].pcolors;
-						vid[(ny+r)*s+nx+2] = ptypes[(int)player2[2]].pcolors;
+						vid[(ny-2)*s+nx+r] = pc;
+						vid[(ny+2)*s+nx+r+1] = pc;
+						vid[(ny+r+1)*s+nx-2] = pc;
+						vid[(ny+r)*s+nx+2] = pc;
 					}
 					draw_line(vid , nx, ny+3, player2[3], player2[4], 100, 100, 255, s);
 					draw_line(vid , player2[3], player2[4], player2[7], player2[8], 100, 100, 255, s);
@@ -1698,7 +1757,7 @@ void draw_parts(pixel *vid)
 
 					isplayer2 = 1;  //It's a secret. Tssss...
 				}
-				if (cmode==CM_NOTHING && t!=PT_PIPE && t!=PT_SWCH && t!=PT_LCRY && t!=PT_PUMP && t!=PT_FILT && t!=PT_HSWC && t!=PT_PCLN && t!=PT_DEUT && t!=PT_WIFI)//nothing display but show needed color changes
+				if (cmode==CM_NOTHING && t!=PT_PIPE && t!=PT_SWCH && t!=PT_LCRY && t!=PT_PUMP && t!=PT_GPMP && t!=PT_PBCN && t!=PT_FILT && t!=PT_HSWC && t!=PT_PCLN && t!=PT_DEUT && t!=PT_WIFI)//nothing display but show needed color changes
 				{
 					if (t==PT_PHOT)
 					{
@@ -1756,7 +1815,8 @@ void draw_parts(pixel *vid)
 				         t!=PT_NEUT && t!=PT_LAVA && t!=PT_BOMB &&
 				         t!=PT_PHOT && t!=PT_THDR && t!=PT_SMKE &&
 				         t!=PT_LCRY && t!=PT_SWCH && t!=PT_PCLN &&
-				         t!=PT_PUMP && t!=PT_HSWC && t!=PT_FILT)
+				         t!=PT_PUMP && t!=PT_HSWC && t!=PT_FILT &&
+				         t!=PT_GPMP && t!=PT_PBCN)
 				{
 					if (ptypes[parts[i].type].properties&TYPE_LIQUID) //special effects for liquids in fancy mode
 					{
@@ -2494,7 +2554,7 @@ void draw_parts(pixel *vid)
 						cr *= x;
 						cg *= x;
 						cb *= x;
-						vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(cr>255?255:cr,cg>255?255:cg,cb>255?255:cb);
+						vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(cr>255?255:cr,cg>255?255:cg,cb>255?255:cb);						
 						cr >>= 4;
 						cg >>= 4;
 						cb >>= 4;
@@ -2528,15 +2588,26 @@ void draw_parts(pixel *vid)
 						cr = cr>255?255:cr;
 						cg = cg>255?255:cg;
 						cb = cb>255?255:cb;
-						blendpixel(vid, nx, ny, cr, cg, cb, 192);
-						blendpixel(vid, nx+1, ny, cr, cg, cb, 96);
-						blendpixel(vid, nx-1, ny, cr, cg, cb, 96);
-						blendpixel(vid, nx, ny+1, cr, cg, cb, 96);
-						blendpixel(vid, nx, ny-1, cr, cg, cb, 96);
-						blendpixel(vid, nx+1, ny-1, cr, cg, cb, 32);
-						blendpixel(vid, nx-1, ny+1, cr, cg, cb, 32);
-						blendpixel(vid, nx+1, ny+1, cr, cg, cb, 32);
-						blendpixel(vid, nx-1, ny-1, cr, cg, cb, 32);
+						if(cmode == CM_PERS){
+							if(parts[i].pavg[0] && parts[i].pavg[1])
+							{
+								draw_line(vid, nx, ny, parts[i].pavg[0], parts[i].pavg[1], cr, cg, cb, XRES+BARSIZE);
+							}
+							else
+							{
+								vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(cr, cg, cb);	
+							}
+						} else {
+							blendpixel(vid, nx, ny, cr, cg, cb, 192);
+							blendpixel(vid, nx+1, ny, cr, cg, cb, 96);
+							blendpixel(vid, nx-1, ny, cr, cg, cb, 96);
+							blendpixel(vid, nx, ny+1, cr, cg, cb, 96);
+							blendpixel(vid, nx, ny-1, cr, cg, cb, 96);
+							blendpixel(vid, nx+1, ny-1, cr, cg, cb, 32);
+							blendpixel(vid, nx-1, ny+1, cr, cg, cb, 32);
+							blendpixel(vid, nx+1, ny+1, cr, cg, cb, 32);
+							blendpixel(vid, nx-1, ny-1, cr, cg, cb, 32);
+						}
 					}
 				}
 				//Life can be 11 too, so don't just check for 10
@@ -2721,6 +2792,22 @@ void draw_parts(pixel *vid)
 						blendpixel(vid, nx-1, ny+1, GR, GR, 10, 112);
 					}
 				}
+				else if (t==PT_PBCN)
+				{
+					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
+					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(GR, GR/2, 10);
+					if (cmode == CM_BLOB) {
+						blendpixel(vid, nx+1, ny, GR, GR/2, 10, 223);
+						blendpixel(vid, nx-1, ny, GR, GR/2, 10, 223);
+						blendpixel(vid, nx, ny+1, GR, GR/2, 10, 223);
+						blendpixel(vid, nx, ny-1, GR, GR/2, 10, 223);
+
+						blendpixel(vid, nx+1, ny-1, GR, GR/2, 10, 112);
+						blendpixel(vid, nx-1, ny-1, GR, GR/2, 10, 112);
+						blendpixel(vid, nx+1, ny+1, GR, GR/2, 10, 112);
+						blendpixel(vid, nx-1, ny+1, GR, GR/2, 10, 112);
+					}
+				}
 				else if (t==PT_HSWC)
 				{
 					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
@@ -2751,6 +2838,22 @@ void draw_parts(pixel *vid)
 						blendpixel(vid, nx-1, ny-1, 10, 10, GR, 112);
 						blendpixel(vid, nx+1, ny+1, 10, 10, GR, 112);
 						blendpixel(vid, nx-1, ny+1, 10, 10, GR, 112);
+					}
+				}
+				else if (t==PT_GPMP)
+				{
+					uint8 GR = 0x3B+((parts[i].life>10?10:parts[i].life)*19);
+					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(10, GR, GR);
+					if (cmode == CM_BLOB) {
+						blendpixel(vid, nx+1, ny, 10, GR/2, GR, 223);
+						blendpixel(vid, nx-1, ny, 10, GR/2, GR, 223);
+						blendpixel(vid, nx, ny+1, 10, GR/2, GR, 223);
+						blendpixel(vid, nx, ny-1, 10, GR/2, GR, 223);
+
+						blendpixel(vid, nx+1, ny-1, 10, GR/2, GR, 112);
+						blendpixel(vid, nx-1, ny-1, 10, GR/2, GR, 112);
+						blendpixel(vid, nx+1, ny+1, 10, GR/2, GR, 112);
+						blendpixel(vid, nx-1, ny+1, 10, GR/2, GR, 112);
 					}
 				}
 				else if (t==PT_PLSM)
