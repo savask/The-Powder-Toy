@@ -709,7 +709,31 @@ int draw_tool_xy(pixel *vid_buf, int x, int y, int b, unsigned pc)
 	pixel gc;
 	if (x > XRES-26 || x < 0)
 		return 26;
-	if (b>=UI_WALLSTART)
+	if ((b&0xFF) == PT_LIFE)
+	{
+#ifdef OpenGL
+		fillrect(vid_buf, x, y, 28, 16, PIXR(pc), PIXG(pc), PIXB(pc), 255);
+#else
+		for (j=1; j<15; j++)
+		{
+			for (i=1; i<27; i++)
+			{
+				vid_buf[(XRES+BARSIZE)*(y+j)+(x+i)] = pc;
+			}
+		}
+#endif
+		c = PIXB(pc) + 3*PIXG(pc) + 2*PIXR(pc);
+		if (c<544)
+		{
+			c = 255;
+		}
+		else
+		{
+			c = 0;
+		}
+		drawtext(vid_buf, x+14-textwidth((char *)gmenu[(b>>8)&0xFF].name)/2, y+4, (char *)gmenu[(b>>8)&0xFF].name, c, c, c, 255);
+	}
+	else if (b>=UI_WALLSTART)
 	{
 		int ds = 0;
 		if (b-UI_WALLSTART>=0 && b-UI_WALLSTART<UI_WALLCOUNT)
@@ -1496,7 +1520,8 @@ void draw_line(pixel *vid, int x1, int y1, int x2, int y2, int r, int g, int b, 
 	e = (dy<<2)-dx;
 	for (i=0; i<=dx; i++)
 	{
-		vid[x+y*a] =PIXRGB(r, g, b);
+		if (x>=0 && y>=0 && x<a && y<YRES+MENUSIZE)
+			vid[x+y*a] =PIXRGB(r, g, b);
 		if (e>=0)
 		{
 			if (check==1)
@@ -1701,7 +1726,7 @@ void draw_parts(pixel *vid)
 
 			if (cmode!=CM_HEAT)
 			{
-				if (t==PT_STKM) //Just draw head here
+				if (t==PT_STKM)
 				{
 					char buff[20];  //Buffer for HP
 					pixel pc;
@@ -1714,14 +1739,13 @@ void draw_parts(pixel *vid)
 
 					if ((int)player[2]<PT_NUM) pc = ptypes[(int)player[2]].pcolors;
 					else pc = PIXPACK(0xFFFFFF);
-					for (r=-2; r<=1; r++) //Here I use r variable not as I should, but I think you will excuse me :-p
-					{
-						s = XRES+BARSIZE;
-						vid[(ny-2)*s+nx+r] = pc;
-						vid[(ny+2)*s+nx+r+1] = pc;
-						vid[(ny+r+1)*s+nx-2] = pc;
-						vid[(ny+r)*s+nx+2] = pc;
-					}
+					s = XRES+BARSIZE;
+					//head
+					draw_line(vid , nx-2, ny+2, nx+2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx-2, ny-2, nx+2, ny-2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx-2, ny-2, nx-2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx+2, ny-2, nx+2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					//legs
 					draw_line(vid , nx, ny+3, player[3], player[4], 255, 255, 255, s);
 					draw_line(vid , player[3], player[4], player[7], player[8], 255, 255, 255, s);
 					draw_line(vid , nx, ny+3, player[11], player[12], 255, 255, 255, s);
@@ -1729,7 +1753,7 @@ void draw_parts(pixel *vid)
 
 					isplayer = 1;  //It's a secret. Tssss...
 				}
-				else if (t==PT_STKM2) //Just draw head here
+				else if (t==PT_STKM2)
 				{
 					char buff[20];  //Buffer for HP
 					pixel pc;
@@ -1742,14 +1766,13 @@ void draw_parts(pixel *vid)
 
 					if ((int)player2[2]<PT_NUM) pc = ptypes[(int)player2[2]].pcolors;
 					else pc = PIXPACK(0xFFFFFF);
-					for (r=-2; r<=1; r++) //Here I use r variable not as I should, but I think you will excuse me :-p
-					{
-						s = XRES+BARSIZE;
-						vid[(ny-2)*s+nx+r] = pc;
-						vid[(ny+2)*s+nx+r+1] = pc;
-						vid[(ny+r+1)*s+nx-2] = pc;
-						vid[(ny+r)*s+nx+2] = pc;
-					}
+					s = XRES+BARSIZE;
+					//head
+					draw_line(vid , nx-2, ny+2, nx+2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx-2, ny-2, nx+2, ny-2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx-2, ny-2, nx-2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					draw_line(vid , nx+2, ny-2, nx+2, ny+2, PIXR(pc), PIXG(pc), PIXB(pc), s);
+					//legs
 					draw_line(vid , nx, ny+3, player2[3], player2[4], 100, 100, 255, s);
 					draw_line(vid , player2[3], player2[4], player2[7], player2[8], 100, 100, 255, s);
 					draw_line(vid , nx, ny+3, player2[11], player2[12], 100, 100, 255, s);
@@ -2043,48 +2066,52 @@ void draw_parts(pixel *vid)
 					blendpixel(vid, nx, ny, cr, cg, cb, 255);
 
 				}
-				else if (t==PT_LOTE)//colors for life states
-				{
-					if (parts[i].tmp==2)
-						blendpixel(vid, nx, ny, 255, 128, 0, 255);
-					else if (parts[i].tmp==1)
-						blendpixel(vid, nx, ny, 255, 255, 0, 255);
-					else
-						blendpixel(vid, nx, ny, 255, 0, 0, 255);
-				}
-				else if (t==PT_FRG2)//colors for life states
-				{
-					if (parts[i].tmp==2)
-						blendpixel(vid, nx, ny, 0, 100, 50, 255);
-					else
-						blendpixel(vid, nx, ny, 0, 255, 90, 255);
-				}
-				else if (t==PT_STAR)//colors for life states
-				{
-					if (parts[i].tmp==4)
-						blendpixel(vid, nx, ny, 0, 0, 128, 255);
-					else if (parts[i].tmp==3)
-						blendpixel(vid, nx, ny, 0, 0, 150, 255);
-					else if (parts[i].tmp==2)
-						blendpixel(vid, nx, ny, 0, 0, 190, 255);
-					else if (parts[i].tmp==1)
-						blendpixel(vid, nx, ny, 0, 0, 230, 255);
-					else
-						blendpixel(vid, nx, ny, 0, 0, 70, 255);
-				}
-				else if (t==PT_FROG)//colors for life states
-				{
-					if (parts[i].tmp==2)
-						blendpixel(vid, nx, ny, 0, 100, 0, 255);
-					else
-						blendpixel(vid, nx, ny, 0, 255, 0, 255);
-				}
-				else if (t==PT_BRAN)//colors for life states
-				{
-					if (parts[i].tmp==1)
-						blendpixel(vid, nx, ny, 150, 150, 0, 255);
-					else
-						blendpixel(vid, nx, ny, 255, 255, 0, 255);
+				if(t==PT_LIFE && parts[i].ctype < NGOLALT){
+					if (parts[i].ctype==NGT_LOTE)//colors for life states
+					{
+						if (parts[i].tmp==2)
+							blendpixel(vid, nx, ny, 255, 128, 0, 255);
+						else if (parts[i].tmp==1)
+							blendpixel(vid, nx, ny, 255, 255, 0, 255);
+						else
+							blendpixel(vid, nx, ny, 255, 0, 0, 255);
+					}
+					else if (parts[i].ctype==NGT_FRG2)//colors for life states
+					{
+						if (parts[i].tmp==2)
+							blendpixel(vid, nx, ny, 0, 100, 50, 255);
+						else
+							blendpixel(vid, nx, ny, 0, 255, 90, 255);
+					}
+					else if (parts[i].ctype==NGT_STAR)//colors for life states
+					{
+						if (parts[i].tmp==4)
+							blendpixel(vid, nx, ny, 0, 0, 128, 255);
+						else if (parts[i].tmp==3)
+							blendpixel(vid, nx, ny, 0, 0, 150, 255);
+						else if (parts[i].tmp==2)
+							blendpixel(vid, nx, ny, 0, 0, 190, 255);
+						else if (parts[i].tmp==1)
+							blendpixel(vid, nx, ny, 0, 0, 230, 255);
+						else
+							blendpixel(vid, nx, ny, 0, 0, 70, 255);
+					}
+					else if (parts[i].ctype==NGT_FROG)//colors for life states
+					{
+						if (parts[i].tmp==2)
+							blendpixel(vid, nx, ny, 0, 100, 0, 255);
+						else
+							blendpixel(vid, nx, ny, 0, 255, 0, 255);
+					}
+					else if (parts[i].ctype==NGT_BRAN)//colors for life states
+					{
+						if (parts[i].tmp==1)
+							blendpixel(vid, nx, ny, 150, 150, 0, 255);
+						else
+							blendpixel(vid, nx, ny, 255, 255, 0, 255);
+					} else {
+						blendpixel(vid, nx, ny, PIXR(gmenu[parts[i].ctype].colour), PIXG(gmenu[parts[i].ctype].colour), PIXB(gmenu[parts[i].ctype].colour), 255);
+					}
 				}
 				else if (t==PT_DEUT)
 				{
@@ -2378,11 +2405,11 @@ void draw_parts(pixel *vid)
 						cg = PIXG(ptypes[t].pcolors);
 						cb = PIXB(ptypes[t].pcolors);
 					}
-					if (parts[i].tmp)
+					if ((parts[i].tmp&0xFF)>0 && (parts[i].tmp&0xFF)<PT_NUM)
 					{
-						cr = PIXR(ptypes[parts[i].tmp].pcolors);
-						cg = PIXG(ptypes[parts[i].tmp].pcolors);
-						cb = PIXB(ptypes[parts[i].tmp].pcolors);
+						cr = PIXR(ptypes[parts[i].tmp&0xFF].pcolors);
+						cg = PIXG(ptypes[parts[i].tmp&0xFF].pcolors);
+						cb = PIXB(ptypes[parts[i].tmp&0xFF].pcolors);
 					}
 					blendpixel(vid, nx, ny, cr, cg, cb, 255);
 
@@ -3790,6 +3817,7 @@ void draw_rgba_image(pixel *vid, unsigned char *data, int x, int y, float alpha)
 	unsigned char w, h;
 	int i, j;
 	unsigned char r, g, b, a;
+	if (!data) return;
 	w = *(data++)&0xFF;
 	h = *(data++)&0xFF;
 	for (j=0; j<h; j++)
@@ -3808,6 +3836,7 @@ void draw_rgba_image(pixel *vid, unsigned char *data, int x, int y, float alpha)
 void draw_image(pixel *vid, pixel *img, int x, int y, int w, int h, int a)
 {
 	int i, j, r, g, b;
+	if (!img) return;
 	for (j=0; j<h; j++)
 		for (i=0; i<w; i++)
 		{
@@ -4276,7 +4305,7 @@ int sdl_open(void)
 	sdl_seticon();
 	SDL_EnableUNICODE(1);
 	//SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
-#if (defined(LIN32) || defined(LIN64)) && defined(SDL_VIDEO_DRIVER_X11) && defined(LIN_CLIP_TEST)
+#if (defined(LIN32) || defined(LIN64)) && defined(SDL_VIDEO_DRIVER_X11)
 	SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
 	SDL_VERSION(&sdl_wminfo.version);
 	SDL_GetWMInfo(&sdl_wminfo);
