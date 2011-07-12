@@ -2052,6 +2052,17 @@ void draw_parts(pixel *vid)
 						blendpixel(vid, nx, ny, cr, cg, cb, 255);
 					}
 				}
+				else if (t==PT_CLST)
+				{
+					int z = parts[i].tmp - 5;//speckles!
+					cr = z * 16 + PIXR(ptypes[t].pcolors);
+					cg = z * 16 + PIXG(ptypes[t].pcolors);
+					cb = z * 16 + PIXB(ptypes[t].pcolors);
+					cr = cr>255?255:cr;
+					cg = cg>255?255:cg;
+					cb = cb>255?255:cb;
+					blendpixel(vid, nx, ny, cr, cg, cb, 255);
+				}
 				else if (t==PT_SPNG)
 				{
 					cr = PIXR(ptypes[t].pcolors) - parts[i].life*15;
@@ -2066,7 +2077,7 @@ void draw_parts(pixel *vid)
 					blendpixel(vid, nx, ny, cr, cg, cb, 255);
 
 				}
-				if(t==PT_LIFE && parts[i].ctype < NGOLALT){
+				else if (t==PT_LIFE && parts[i].ctype>=0 && parts[i].ctype < NGOLALT) {
 					if (parts[i].ctype==NGT_LOTE)//colors for life states
 					{
 						if (parts[i].tmp==2)
@@ -4203,7 +4214,7 @@ corrupt:
 void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 {
 	int i,j,c;
-	if (t<PT_NUM||t==SPC_AIR||t==SPC_HEAT||t==SPC_COOL||t==SPC_VACUUM||t==SPC_WIND)
+	if (t<PT_NUM||(t&0xFF)==PT_LIFE||t==SPC_AIR||t==SPC_HEAT||t==SPC_COOL||t==SPC_VACUUM||t==SPC_WIND)
 	{
 		if (rx<=0)
 			xor_pixel(x, y, vid);

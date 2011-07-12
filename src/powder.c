@@ -831,7 +831,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			if (t==goltype[r])
 				parts[i].tmp = grule[r+1][9] - 1;
 	}*/
-	if (t==PT_LIFE)
+	if (t==PT_LIFE && v<NGOLALT)
 	{
 		parts[i].tmp = grule[v+1][9] - 1;
 		parts[i].ctype = v;
@@ -851,6 +851,8 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 		parts[i].tmp = (rand()%11);
 	if (t==PT_PQRT)
 		parts[i].tmp = (rand()%11);
+	if (t==PT_CLST)
+		parts[i].tmp = (rand()%7);
 	if (t==PT_FSEP)
 		parts[i].life = 50;
 	if (t==PT_COAL) {
@@ -1484,6 +1486,10 @@ void update_particles_i(pixel *vid, int start, int inc)
 						if (parts[r>>8].type==PT_LIFE/* && parts[r>>8].ctype==golnum-1*/)
 						{
 							golnum = parts[r>>8].ctype+1;
+							if (golnum<=0 || golnum>NGOLALT) {
+								parts[r>>8].type = PT_NONE;
+								continue;
+							}
 							if (parts[r>>8].tmp == grule[golnum][9]-1) {
 								gol[nx][ny] = golnum;
 								for ( nnx=-1; nnx<2; nnx++)
@@ -2639,7 +2645,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 				{
 					i = ox;
 					j = oy;
-					if (((sdl_mod & (KMOD_LALT) && sdl_mod & (KMOD_SHIFT))|| ((sdl_mod & (KMOD_CAPS)) && b!=WL_FANHELPER) ))
+					if (((sdl_mod & (KMOD_LALT) && sdl_mod & (KMOD_CTRL))|| ((sdl_mod & (KMOD_CAPS)) && b!=WL_FANHELPER) ))
 					{
 						if (bmap[j][i]==SLALT-100)
 							b = 0;
@@ -2671,8 +2677,8 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		return 1;
 	}
 
-	//if SHIFT+ALT or CAPSLOCK is on, specific delete
-	if (((sdl_mod & (KMOD_LALT) && sdl_mod & (KMOD_SHIFT))|| sdl_mod & (KMOD_CAPS) )&& !REPLACE_MODE)
+	//if CTRL+ALT or CAPSLOCK is on, specific delete
+	if (((sdl_mod & (KMOD_LALT) && sdl_mod & (KMOD_CTRL))|| sdl_mod & (KMOD_CAPS) )&& !REPLACE_MODE)
 	{
 		if (rx==0&&ry==0)
 		{
