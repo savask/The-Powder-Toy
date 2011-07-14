@@ -466,7 +466,7 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
-		if (i && (parts[i-1].type==PT_CLNE || parts[i-1].type==PT_PCLN || parts[i-1].type==PT_BCLN || parts[i-1].type==PT_SPRK || parts[i-1].type==PT_LAVA || parts[i-1].type==PT_PIPE || parts[i-1].type==PT_LIFE))
+		if (i && (parts[i-1].type==PT_CLNE || parts[i-1].type==PT_PCLN || parts[i-1].type==PT_BCLN || parts[i-1].type==PT_SPRK || parts[i-1].type==PT_LAVA || parts[i-1].type==PT_PIPE || parts[i-1].type==PT_LIFE || parts[i-1].type==PT_PBCN))
 			d[p++] = parts[i-1].ctype;
 	}
 
@@ -978,7 +978,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		int gnum = 0;
 		i = m[j];
 		ty = d[pty+j];
-		if (i && (ty==PT_CLNE || (ty==PT_PCLN && ver>=43) || (ty==PT_BCLN && ver>=44) || (ty==PT_SPRK && ver>=21) || (ty==PT_LAVA && ver>=34) || (ty==PT_PIPE && ver>=43) || (ty==PT_LIFE && ver>=51)))
+		if (i && (ty==PT_CLNE || (ty==PT_PCLN && ver>=43) || (ty==PT_BCLN && ver>=44) || (ty==PT_SPRK && ver>=21) || (ty==PT_LAVA && ver>=34) || (ty==PT_PIPE && ver>=43) || (ty==PT_LIFE && ver>=51) || (ty==PT_PBCN && ver>=52)))
 		{
 			if (p >= size)
 				goto corrupt;
@@ -3055,7 +3055,7 @@ int main(int argc, char *argv[])
 						{
 							for (j=-bsy; j<=bsy; j++)
 								for (i=-bsx; i<=bsx; i++)
-									if (lx+i>=0 && ly+j>=0 && lx+i<XRES && ly+j<YRES && ((CURRENT_BRUSH==CIRCLE_BRUSH && pow(i,2)*pow(bsy,2)+pow(j,2)*pow(bsx,2)<=pow(bsx,2)*pow(bsy,2))||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=bsy*bsx)))
+									if (lx+i>0 && ly+j>0 && lx+i<XRES && ly+j<YRES && InCurrentBrush(i,j,bsx,bsy))
 									{
 										vx[(ly+j)/CELL][(lx+i)/CELL] += (line_x-lx)*0.002f;
 										vy[(ly+j)/CELL][(lx+i)/CELL] += (line_y-ly)*0.002f;
@@ -3075,7 +3075,7 @@ int main(int argc, char *argv[])
 						{
 							for (j=-bsy; j<=bsy; j++)
 								for (i=-bsx; i<=bsx; i++)
-									if (x+i>0 && y+j>0 && x+i<XRES && y+j<YRES && ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(bsx,2))+(pow(j,2))/(pow(bsy,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=bsy*bsx)))
+									if (x+i>0 && y+j>0 && x+i<XRES && y+j<YRES && InCurrentBrush(i,j,bsx,bsy))
 									{
 										vx[(y+j)/CELL][(x+i)/CELL] += (x-lx)*0.01f;
 										vy[(y+j)/CELL][(x+i)/CELL] += (y-ly)*0.01f;
@@ -3181,8 +3181,6 @@ int main(int argc, char *argv[])
 			{
 				x /= sdl_scale;
 				y /= sdl_scale;
-				line_x /= sdl_scale;
-				line_y /= sdl_scale;
 				c = (lb&1) ? sl : sr;
 				su = c;
 				if (lm == 1)//line

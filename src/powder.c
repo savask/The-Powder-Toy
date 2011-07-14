@@ -2483,8 +2483,9 @@ void create_box(int x1, int y1, int x2, int y2, int c)
 			create_parts(i, j, 0, 0, c);
 }
 
-int flood_parts(int x, int y, int c, int cm, int bm)
+int flood_parts(int x, int y, int fullc, int cm, int bm)
 {
+	int c = fullc&0xFF;
 	int x1, x2, dy = (c<PT_NUM)?1:CELL;
 	int co = c;
 	if (cm==PT_INST&&co==PT_SPRK)
@@ -2544,10 +2545,10 @@ int flood_parts(int x, int y, int c, int cm, int bm)
 	{
 		if (cm==PT_INST&&co==PT_SPRK)
 		{
-			if (create_part(-1,x, y, co)==-1)
+			if (create_part(-1,x, y, fullc)==-1)
 				return 0;
 		}
-		else if (!create_parts(x, y, 0, 0, co))
+		else if (!create_parts(x, y, 0, 0, fullc))
 			return 0;
 	}
 	// fill children
@@ -2556,7 +2557,7 @@ int flood_parts(int x, int y, int c, int cm, int bm)
 		if (y>=CELL+dy && x1==x2 &&
 		        ((pmap[y-1][x1-1]&0xFF)==PT_INST||(pmap[y-1][x1-1]&0xFF)==PT_SPRK) && ((pmap[y-1][x1]&0xFF)==PT_INST||(pmap[y-1][x1]&0xFF)==PT_SPRK) && ((pmap[y-1][x1+1]&0xFF)==PT_INST || (pmap[y-1][x1+1]&0xFF)==PT_SPRK) &&
 		        (pmap[y-2][x1-1]&0xFF)!=PT_INST && ((pmap[y-2][x1]&0xFF)==PT_INST ||(pmap[y-2][x1]&0xFF)==PT_SPRK) && (pmap[y-2][x1+1]&0xFF)!=PT_INST)
-			flood_parts(x1, y-2, co, cm, bm);
+			flood_parts(x1, y-2, fullc, cm, bm);
 		else if (y>=CELL+dy)
 			for (x=x1; x<=x2; x++)
 				if ((pmap[y-1][x]&0xFF)!=PT_SPRK)
@@ -2564,14 +2565,14 @@ int flood_parts(int x, int y, int c, int cm, int bm)
 					if (x==x1 || x==x2 || y>=YRES-CELL-1 ||
 					        (pmap[y-1][x-1]&0xFF)==PT_INST || (pmap[y-1][x+1]&0xFF)==PT_INST ||
 					        (pmap[y+1][x-1]&0xFF)==PT_INST || ((pmap[y+1][x]&0xFF)!=PT_INST&&(pmap[y+1][x]&0xFF)!=PT_SPRK) || (pmap[y+1][x+1]&0xFF)==PT_INST)
-						flood_parts(x, y-dy, co, cm, bm);
+						flood_parts(x, y-dy, fullc, cm, bm);
 
 				}
 
 		if (y<YRES-CELL-dy && x1==x2 &&
 		        ((pmap[y+1][x1-1]&0xFF)==PT_INST||(pmap[y+1][x1-1]&0xFF)==PT_SPRK) && ((pmap[y+1][x1]&0xFF)==PT_INST||(pmap[y+1][x1]&0xFF)==PT_SPRK) && ((pmap[y+1][x1+1]&0xFF)==PT_INST || (pmap[y+1][x1+1]&0xFF)==PT_SPRK) &&
 		        (pmap[y+2][x1-1]&0xFF)!=PT_INST && ((pmap[y+2][x1]&0xFF)==PT_INST ||(pmap[y+2][x1]&0xFF)==PT_SPRK) && (pmap[y+2][x1+1]&0xFF)!=PT_INST)
-			flood_parts(x1, y+2, co, cm, bm);
+			flood_parts(x1, y+2, fullc, cm, bm);
 		else if (y<YRES-CELL-dy)
 			for (x=x1; x<=x2; x++)
 				if ((pmap[y+1][x]&0xFF)!=PT_SPRK)
@@ -2579,7 +2580,7 @@ int flood_parts(int x, int y, int c, int cm, int bm)
 					if (x==x1 || x==x2 || y<0 ||
 					        (pmap[y+1][x-1]&0xFF)==PT_INST || (pmap[y+1][x+1]&0xFF)==PT_INST ||
 					        (pmap[y-1][x-1]&0xFF)==PT_INST || ((pmap[y-1][x]&0xFF)!=PT_INST&&(pmap[y-1][x]&0xFF)!=PT_SPRK) || (pmap[y-1][x+1]&0xFF)==PT_INST)
-						flood_parts(x, y+dy, co, cm, bm);
+						flood_parts(x, y+dy, fullc, cm, bm);
 
 				}
 	}
@@ -2588,12 +2589,12 @@ int flood_parts(int x, int y, int c, int cm, int bm)
 		if (y>=CELL+dy)
 			for (x=x1; x<=x2; x++)
 				if ((pmap[y-dy][x]&0xFF)==cm && bmap[(y-dy)/CELL][x/CELL]==bm)
-					if (!flood_parts(x, y-dy, co, cm, bm))
+					if (!flood_parts(x, y-dy, fullc, cm, bm))
 						return 0;
 		if (y<YRES-CELL-dy)
 			for (x=x1; x<=x2; x++)
 				if ((pmap[y+dy][x]&0xFF)==cm && bmap[(y+dy)/CELL][x/CELL]==bm)
-					if (!flood_parts(x, y+dy, co, cm, bm))
+					if (!flood_parts(x, y+dy, fullc, cm, bm))
 						return 0;
 	}
 	if (!(cm==PT_INST&&co==PT_SPRK))
@@ -2687,7 +2688,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		else
 			for (j=-ry; j<=ry; j++)
 				for (i=-rx; i<=rx; i++)
-					if ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=ry*rx))
+					if (InCurrentBrush(i ,j ,rx ,ry))
 						delete_part(x+i, y+j);
 		return 1;
 	}
@@ -2702,7 +2703,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		else
 			for (j=-ry; j<=ry; j++)
 				for (i=-rx; i<=rx; i++)
-					if ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=ry*rx))
+					if (InCurrentBrush(i ,j ,rx ,ry))
 					{
 						if ( x+i<0 || y+j<0 || x+i>=XRES || y+j>=YRES)
 							continue;
@@ -2726,7 +2727,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		else
 			for (j=-ry; j<=ry; j++)
 				for (i=-rx; i<=rx; i++)
-					if ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=ry*rx))
+					if (InCurrentBrush(i ,j ,rx ,ry))
 						delete_part(x+i, y+j);
 		SLALT = stemp;
 		return 1;
@@ -2748,7 +2749,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 		else
 			for (j=-ry; j<=ry; j++)
 				for (i=-rx; i<=rx; i++)
-					if ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=ry*rx))
+					if (InCurrentBrush(i ,j ,rx ,ry))
 					{
 						if ( x+i<0 || y+j<0 || x+i>=XRES || y+j>=YRES)
 							continue;
@@ -2773,12 +2774,29 @@ int create_parts(int x, int y, int rx, int ry, int c)
 	else
 		for (j=-ry; j<=ry; j++)
 			for (i=-rx; i<=rx; i++)
-				if ((CURRENT_BRUSH==CIRCLE_BRUSH && (pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1)||(CURRENT_BRUSH==SQUARE_BRUSH&&i*j<=ry*rx))
+				if (InCurrentBrush(i ,j ,rx ,ry))
 					if (create_part(-2, x+i, y+j, c)==-1)
 						f = 1;
 	return !f;
 }
-
+int InCurrentBrush(int i, int j, int rx, int ry)
+{
+	switch(CURRENT_BRUSH)
+	{
+		case CIRCLE_BRUSH:
+			return ((pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1);
+			break;
+		case SQUARE_BRUSH:
+			return (i*j<=ry*rx);
+			break;
+		case TRI_BRUSH:
+			return (j <= ry ) && ( j >= (((-2.0*ry)/rx)*i) -ry) && ( j >= (((-2.0*ry)/(-rx))*i)-ry ) ;
+			break;
+		default:
+			return 0;
+			break;
+	}
+}
 void create_line(int x1, int y1, int x2, int y2, int rx, int ry, int c)
 {
 	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
