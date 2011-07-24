@@ -7,10 +7,10 @@
 #define PATH_SEP "/"
 #endif
  
-#define SAVE_VERSION 52
+#define SAVE_VERSION 53
 #define MINOR_VERSION 0
 #define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
-//#define BETA
+#define BETA
 
 #define SERVER "powdertoy.co.uk"
 
@@ -146,6 +146,9 @@ extern int sound_enable;
 extern int kiosk_enable;
 extern int aheat_enable;
 extern int decorations_enable;
+extern int hud_enable;
+
+extern int active_menu;
 
 extern int sys_pause;
 extern int framerender;

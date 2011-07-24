@@ -36,6 +36,12 @@ void luacon_open(){
 		{"start_getPartIndex", &luatpt_start_getPartIndex},
 		{"next_getPartIndex", &luatpt_next_getPartIndex},
 		{"getPartIndex", &luatpt_getPartIndex},
+		{"hud", &luatpt_hud},
+		{"newtonian_gravity", &luatpt_gravity},
+		{"ambient_heat", &luatpt_airheat},
+		{"active_menu", &luatpt_active_menu},
+		{"decorations_enable", &luatpt_decorations_enable},
+		{"display_mode", &luatpt_cmode_set},
 		{NULL,NULL}
 	};
 
@@ -169,9 +175,7 @@ int luatpt_create(lua_State* l)
 	if(x < XRES && y < YRES){
 		if(lua_isnumber(l, 3)){
 			t = luaL_optint(l, 3, 0);
-			if (t==OLD_PT_WIND)
-				return 0;
-			if (t<0 || t >= PT_NUM)
+			if (t<0 || t >= PT_NUM || !ptypes[t].enabled)
 				return luaL_error(l, "Unrecognised element number '%d'", t);
 		} else {
 			name = luaL_optstring(l, 3, "dust");
@@ -809,5 +813,51 @@ int luatpt_getPartIndex(lua_State* l)
     }
     lua_pushinteger(l, getPartIndex_curIdx);
     return 1;
+}
+int luatpt_hud(lua_State* l)
+{
+    int hudstate;
+    hudstate = luaL_optint(l, 1, 0);
+    hud_enable = (hudstate==0?0:1);
+    return 0;
+}
+int luatpt_gravity(lua_State* l)
+{
+    int gravstate;
+    gravstate = luaL_optint(l, 1, 0);
+    if(gravstate)
+        start_grav_async();
+    else
+        stop_grav_async();
+    ngrav_enable = (gravstate==0?0:1);
+    return 0;
+}
+int luatpt_airheat(lua_State* l)
+{
+    int aheatstate;
+    aheatstate = luaL_optint(l, 1, 0);
+    aheat_enable = (aheatstate==0?0:1);
+    return 0;
+}
+int luatpt_active_menu(lua_State* l)
+{
+    int aheatstate;
+    aheatstate = luaL_optint(l, 1, menu_count);
+    active_menu = aheatstate;
+    return 0;
+}
+int luatpt_decorations_enable(lua_State* l)
+{
+    int aheatstate;
+    aheatstate = luaL_optint(l, 1, 0);
+    decorations_enable = (aheatstate==0?0:1);
+    return 0;
+}
+int luatpt_cmode_set(lua_State* l)
+{
+    int aheatstate;
+    aheatstate = luaL_optint(l, 1, CM_COUNT);
+    cmode = aheatstate;
+    return 0;
 }
 #endif

@@ -7,16 +7,25 @@ float kernel[9];
 float gravmap[YRES/CELL][XRES/CELL];  //Maps to be used by the main thread
 float gravx[YRES/CELL][XRES/CELL];
 float gravy[YRES/CELL][XRES/CELL];
+float gravp[YRES/CELL][XRES/CELL];
+float *gravpf;
+float *gravyf;
+float *gravxf;
 unsigned gravmask[YRES/CELL][XRES/CELL];
 
 float th_ogravmap[YRES/CELL][XRES/CELL]; // Maps to be processed by the gravity thread
 float th_gravmap[YRES/CELL][XRES/CELL];
 float th_gravx[YRES/CELL][XRES/CELL];
 float th_gravy[YRES/CELL][XRES/CELL];
+float th_gravp[YRES/CELL][XRES/CELL];
+float *th_gravpf;
+float *th_gravyf;
+float *th_gravxf;
 
 float vx[YRES/CELL][XRES/CELL], ovx[YRES/CELL][XRES/CELL];
 float vy[YRES/CELL][XRES/CELL], ovy[YRES/CELL][XRES/CELL];
 float pv[YRES/CELL][XRES/CELL], opv[YRES/CELL][XRES/CELL];
+unsigned char bmap_blockair[YRES/CELL][XRES/CELL];
 
 float cb_vx[YRES/CELL][XRES/CELL];
 float cb_vy[YRES/CELL][XRES/CELL];
@@ -119,6 +128,31 @@ void update_airh(void)
 	}
 	memcpy(hv, ohv, sizeof(hv));
 }
+void bilinear_interpolation(float *src, float *dst, int sw, int sh, int rw, int rh)
+{
+	int y, x, fxceil, fyceil;
+	float fx, fy, fyc, fxc;
+	double intp;
+	float tr, tl, br, bl;
+	//Bilinear interpolation for upscaling
+	for (y=0; y<rh; y++)
+		for (x=0; x<rw; x++)
+		{
+			fx = ((float)x)*((float)sw)/((float)rw);
+			fy = ((float)y)*((float)sh)/((float)rh);
+			fxc = modf(fx, &intp);
+			fyc = modf(fy, &intp);
+			fxceil = (int)ceil(fx);
+			fyceil = (int)ceil(fy);
+			if (fxceil>=sw) fxceil = sw-1;
+			if (fyceil>=sh) fyceil = sh-1;
+			tr = src[sw*(int)floor(fy)+fxceil];
+			tl = src[sw*(int)floor(fy)+(int)floor(fx)];
+			br = src[sw*fyceil+fxceil];
+			bl = src[sw*fyceil+(int)floor(fx)];
+			dst[rw*y+x] = ((tl*(1.0f-fxc))+(tr*(fxc)))*(1.0f-fyc) + ((bl*(1.0f-fxc))+(br*(fxc)))*(fyc);				
+		}
+}
 
 void update_grav(void)
 {
@@ -164,11 +198,15 @@ void update_grav(void)
 #endif
 						th_gravx[y][x] += M_GRAV * val * (j - x) / pow(distance, 3);
 						th_gravy[y][x] += M_GRAV * val * (i - y) / pow(distance, 3);
+						th_gravp[y][x] += M_GRAV * val / pow(distance, 2);
 					}
 				}
 			}
 		}
 	}
+	bilinear_interpolation(th_gravy, th_gravyf, XRES/CELL, YRES/CELL, XRES, YRES);
+	bilinear_interpolation(th_gravx, th_gravxf, XRES/CELL, YRES/CELL, XRES, YRES);
+	bilinear_interpolation(th_gravp, th_gravpf, XRES/CELL, YRES/CELL, XRES, YRES);
 fin:
 	memcpy(th_ogravmap, th_gravmap, sizeof(th_gravmap));
 	memset(th_gravmap, 0, sizeof(th_gravmap));
@@ -178,6 +216,11 @@ void update_air(void)
 	int x, y, i, j;
 	float dp, dx, dy, f, tx, ty;
 
+	for (y=0; y<YRES/CELL; y++)
+		for (x=0; x<XRES/CELL; x++)
+		{
+			bmap_blockair[y][x] = (bmap[y][x]==WL_WALL || bmap[y][x]==WL_WALLELEC || (bmap[y][x]==WL_EWALL && !emap[y][x]));
+		}
 	if (airMode != 4) { //airMode 4 is no air/pressure update
 
 		for (i=0; i<YRES/CELL; i++) //reduces pressure/velocity on the edges every frame
@@ -217,7 +260,7 @@ void update_air(void)
 		{
 			for (i=1; i<XRES/CELL; i++)
 			{
-				if (bmap[j][i]==WL_WALL || bmap[j][i]==WL_WALLELEC || (bmap[j][i]==WL_EWALL && !emap[j][i]))
+				if (bmap_blockair[j][i])
 				{
 					vx[j][i] = 0.0f;
 					vx[j][i-1] = 0.0f;
@@ -247,15 +290,9 @@ void update_air(void)
 				vy[y][x] *= AIR_VLOSS;
 				vx[y][x] += dx*AIR_TSTEPV;
 				vy[y][x] += dy*AIR_TSTEPV;
-				if (bmap[y][x]==WL_WALL || bmap[y][x+1]==WL_WALL ||
-				        bmap[y][x]==WL_WALLELEC || bmap[y][x+1]==WL_WALLELEC ||
-				        (bmap[y][x]==WL_EWALL && !emap[y][x]) ||
-				        (bmap[y][x+1]==WL_EWALL && !emap[y][x+1]))
+				if (bmap_blockair[y][x] || bmap_blockair[y][x+1])
 					vx[y][x] = 0;
-				if (bmap[y][x]==WL_WALL || bmap[y+1][x]==WL_WALL ||
-				        bmap[y][x]==WL_WALLELEC || bmap[y+1][x]==WL_WALLELEC ||
-				        (bmap[y][x]==WL_EWALL && !emap[y][x]) ||
-				        (bmap[y+1][x]==WL_EWALL && !emap[y+1][x]))
+				if (bmap_blockair[y][x] || bmap_blockair[y+1][x])
 					vy[y][x] = 0;
 			}
 
@@ -269,9 +306,7 @@ void update_air(void)
 					for (i=-1; i<2; i++)
 						if (y+j>0 && y+j<YRES/CELL-1 &&
 						        x+i>0 && x+i<XRES/CELL-1 &&
-						        bmap[y+j][x+i]!=WL_WALL &&
-						        bmap[y+j][x+i]!=WL_WALLELEC &&
-						        (bmap[y+j][x+i]!=WL_EWALL || emap[y+j][x+i]))
+						        !bmap_blockair[y+j][x+i])
 						{
 							f = kernel[i+1+(j+1)*3];
 							dx += vx[y+j][x+i]*f;

@@ -178,6 +178,8 @@ int legacy_enable = 0; //Used to disable new features such as heat, will be set 
 int ngrav_enable = 0; //Newtonian gravity, will be set by save
 int aheat_enable; //Ambient heat
 int decorations_enable = 1;
+int hud_enable = 1;
+int active_menu = 0;
 int framerender = 0;
 int amd = 1;
 int FPSB = 0;
@@ -418,6 +420,14 @@ void *build_save(int *size, int x0, int y0, int w, int h, unsigned char bmap[YRE
 			int tttmp = (int)parts[i-1].tmp;
 			d[p++] = ((tttmp&0xFF00)>>8);
 			d[p++] = (tttmp&0x00FF);
+		}
+	}
+	for (j=0; j<w*h; j++)
+	{
+		i = m[j];
+		if (i && (parts[i-1].type==PT_PBCN)) {
+			//Save tmp2
+			d[p++] = parts[i-1].tmp2;
 		}
 	}
 	for (j=0; j<w*h; j++)
@@ -849,14 +859,35 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 					ttv = (d[p++])<<8;
 					ttv |= (d[p++]);
 					parts[i-1].tmp = ttv;
-					if (ptypes[parts[i-1].type].properties&PROP_LIFE && !parts[i-1].tmp)
-						for (q = 1; q<=NGOL ; q++) {
+					if (ver<53 && !parts[i-1].tmp)
+						for (q = 1; q<=NGOLALT; q++) {
 							if (parts[i-1].type==goltype[q-1] && grule[q][9]==2)
 								parts[i-1].tmp = grule[q][9]-1;
 						}
+					if (ver>=51 && ver<53 && parts[i-1].type==PT_PBCN)
+					{
+						parts[i-1].tmp2 = parts[i-1].tmp;
+						parts[i-1].tmp = 0;
+					}
 				} else {
 					p+=2;
 				}
+			}
+		}
+	}
+	if (ver>=53) {
+		for (j=0; j<w*h; j++)
+		{
+			i = m[j];
+			ty = d[pty+j];
+			if (i && ty==PT_PBCN)
+			{
+				if (p >= size)
+					goto corrupt;
+				if (i <= NPART)
+					parts[i-1].tmp2 = d[p++];
+				else
+					p++;
 			}
 		}
 	}
@@ -1010,6 +1041,18 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				}
 				ty = PT_LIFE;
 			}
+			if(ver<52 && (ty==PT_CLNE || ty==PT_PCLN || ty==PT_BCLN)){
+				//Replace old GOL ctypes in clone
+				for (gnum = 0; gnum<NGOLALT; gnum++){
+					if (parts[i-1].ctype==goltype[gnum])
+					{
+						parts[i-1].ctype = PT_LIFE;
+						parts[i-1].tmp = gnum;
+					}
+				}
+			}
+			if (!ptypes[parts[i-1].type].enabled)
+				parts[i-1].type = PT_NONE;
 		}
 	}
 
@@ -1546,8 +1589,8 @@ int main(int argc, char *argv[])
 #else
 int main(int argc, char *argv[])
 {
-	int hud_enable = 1;
-	int active_menu = 0;
+	pixel *part_vbuf; //Extra video buffer
+	pixel *part_vbuf_store;
 #ifdef BETA
 	int is_beta = 0;
 #endif
@@ -1583,7 +1626,18 @@ int main(int argc, char *argv[])
     pthread_win32_thread_attach_np();
 #endif
 	vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
+	part_vbuf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE); //Extra video buffer
+	part_vbuf_store = part_vbuf;
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
+
+	//Allocate full size Gravmaps
+	th_gravyf = calloc(XRES*YRES, sizeof(float));
+	th_gravxf = calloc(XRES*YRES, sizeof(float));
+	th_gravpf = calloc(XRES*YRES, sizeof(float));
+	gravyf = calloc(XRES*YRES, sizeof(float));
+	gravxf = calloc(XRES*YRES, sizeof(float));
+	gravpf = calloc(XRES*YRES, sizeof(float));
+
 	GSPEED = 1;
 
 	/* Set 16-bit stereo audio at 22Khz */
@@ -1787,6 +1841,15 @@ int main(int argc, char *argv[])
 #ifdef OpenGL
 		ClearScreen();
 #else
+
+		if(cmode==CM_FANCY)
+		{
+			part_vbuf = part_vbuf_store;
+			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
+		} else {
+			part_vbuf = vid_buf;
+		}
+
 		if(gravwl_timeout)
 		{
 			if(gravwl_timeout==1)
@@ -1795,16 +1858,16 @@ int main(int argc, char *argv[])
 		}
 		if (cmode==CM_VEL || cmode==CM_PRESS || cmode==CM_CRACK || (cmode==CM_HEAT && aheat_enable))//air only gets drawn in these modes
 		{
-			draw_air(vid_buf);
+			draw_air(part_vbuf);
 		}
 		else if (cmode==CM_PERS)//save background for persistent, then clear
 		{
-			memcpy(vid_buf, pers_bg, (XRES+BARSIZE)*YRES*PIXELSIZE);
-			memset(vid_buf+((XRES+BARSIZE)*YRES), 0, ((XRES+BARSIZE)*YRES*PIXELSIZE)-((XRES+BARSIZE)*YRES*PIXELSIZE));
-		}
+			memcpy(part_vbuf, pers_bg, (XRES+BARSIZE)*YRES*PIXELSIZE);
+			memset(part_vbuf+((XRES+BARSIZE)*YRES), 0, ((XRES+BARSIZE)*YRES*PIXELSIZE)-((XRES+BARSIZE)*YRES*PIXELSIZE));
+}
 		else //clear screen every frame
 		{
-			memset(vid_buf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
+			memset(part_vbuf, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 		}
 #endif
 
@@ -1820,11 +1883,11 @@ int main(int argc, char *argv[])
 		
 		if(ngrav_enable && drawgrav_enable)
 			draw_grav(vid_buf);
-		draw_walls(vid_buf); 
-		update_particles(vid_buf); //update everything
-		draw_parts(vid_buf); //draw particles
+		draw_walls(part_vbuf);
+		update_particles(part_vbuf); //update everything
+		draw_parts(part_vbuf); //draw particles
 		if(sl == WL_GRAV+100 || sr == WL_GRAV+100)
-			draw_grav_zones(vid_buf);
+			draw_grav_zones(part_vbuf);
 		
 		if(ngrav_enable){
 			pthread_mutex_lock(&gravmutex);
@@ -1834,7 +1897,23 @@ int main(int argc, char *argv[])
 				memcpy(th_gravmap, gravmap, sizeof(gravmap)); //Move our current gravmap to be processed other thread
 				memcpy(gravy, th_gravy, sizeof(gravy));	//Hmm, Gravy
 				memcpy(gravx, th_gravx, sizeof(gravx)); //Move the processed velocity maps to be used
+				memcpy(gravp, th_gravp, sizeof(gravp));
+
 				if (!sys_pause||framerender){ //Only update if not paused
+					//Switch the full size gravmaps, we don't really need the two above any more
+					float *tmpf;
+					tmpf = gravyf;
+					gravyf = th_gravyf;
+					th_gravyf = tmpf;
+
+					tmpf = gravxf;
+					gravxf = th_gravxf;
+					th_gravxf = tmpf;
+
+					tmpf = gravpf;
+					gravpf = th_gravpf;
+					th_gravpf = tmpf;
+
 					grav_ready = 0; //Tell the other thread that we're ready for it to continue
 					pthread_cond_signal(&gravcv);
 				}
@@ -1866,9 +1945,12 @@ int main(int argc, char *argv[])
 			fire_fc = (fire_fc+1) % 3;
 		}
 		if (cmode==CM_FIRE||cmode==CM_BLOB||cmode==CM_FANCY)
-			render_fire(vid_buf);
+			render_fire(part_vbuf);
 
-		render_signs(vid_buf);
+		render_signs(part_vbuf);
+
+		if(cmode==CM_FANCY)
+			render_gravlensing(part_vbuf, vid_buf);
 
 		memset(vid_buf+((XRES+BARSIZE)*YRES), 0, (PIXELSIZE*(XRES+BARSIZE))*MENUSIZE);//clear menu areas
 		clearrect(vid_buf, XRES-1, 0, BARSIZE+1, YRES);
@@ -2332,6 +2414,7 @@ int main(int argc, char *argv[])
 			if (sdl_key==SDLK_SPACE)
 				sys_pause = !sys_pause;
 			if (sdl_key=='u')
+
 				aheat_enable = !aheat_enable;
 			if (sdl_key=='h')
 				hud_enable = !hud_enable;
@@ -2588,6 +2671,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
+
 
 		mx = x;
 		my = y;

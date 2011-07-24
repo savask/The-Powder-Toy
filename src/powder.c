@@ -609,7 +609,7 @@ inline void part_change_type(int i, int x, int y, int t)//changes the type of pa
 {
 	if (x<0 || y<0 || x>=XRES || y>=YRES || i>=NPART || t<0 || t>=PT_NUM)
 		return;
-	if (t==OLD_PT_WIND)
+	if (!ptypes[t].enabled)
 		t = PT_NONE;
 
 	if (parts[i].type == PT_STKM)
@@ -634,7 +634,7 @@ inline void part_change_type(int i, int x, int y, int t)//changes the type of pa
 }
 
 #if defined(WIN32) && !defined(__GNUC__)
-_inline int create_part(int p, int x, int y, int t)
+_inline int create_part(int p, int x, int y, int tv)
 #else
 inline int create_part(int p, int x, int y, int tv)//the function for creating a particle, use p=-1 for creating a new particle, -2 is from a brush, or a particle number to replace a particle.
 #endif
@@ -646,7 +646,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 	
 	if (x<0 || y<0 || x>=XRES || y>=YRES || ((t<0 || t>=PT_NUM)&&t!=SPC_HEAT&&t!=SPC_COOL&&t!=SPC_AIR&&t!=SPC_VACUUM))
 		return -1;
-	if (t==OLD_PT_WIND)
+	if (t>=0 && t<PT_NUM && !ptypes[t].enabled)
 		return -1;
 
 	if (t==SPC_HEAT||t==SPC_COOL)
@@ -756,6 +756,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			)
 			{
 				parts[pmap[y][x]>>8].ctype = t;
+				if (t==PT_LIFE && v<NGOLALT) parts[pmap[y][x]>>8].tmp = v;
 			}
 			return -1;
 		}
@@ -2249,7 +2250,7 @@ killed:
 						}
 						else if (ptypes[t].falldown>1 && fabsf(pGravX*parts[i].vx+pGravY*parts[i].vy)>fabsf(pGravY*parts[i].vx-pGravX*parts[i].vy))
 						{
-							float nxf, nyf, ptGrav = ptypes[t].gravity;
+							float nxf, nyf, prev_pGravX, prev_pGravY, ptGrav = ptypes[t].gravity;
 							s = 0;
 							// stagnant is true if FLAG_STAGNANT was set for this particle in previous frame
 							if (!stagnant || nt) //nt is if there is an something else besides the current particle type, around the particle
@@ -2284,8 +2285,18 @@ killed:
 								if (mv<0.0001f) break;
 								pGravX /= mv;
 								pGravY /= mv;
-								nxf += r*pGravY + 0.1f*pGravX;
-								nyf += -r*pGravX + 0.1f*pGravY;
+								if (j)
+								{
+									nxf += r*(pGravY*2.0f-prev_pGravY);
+									nyf += -r*(pGravX*2.0f-prev_pGravX);
+								}
+								else
+								{
+									nxf += r*pGravY;
+									nyf += -r*pGravX;
+								}
+								prev_pGravX = pGravX;
+								prev_pGravY = pGravY;
 								nx = (int)(nxf+0.5f);
 								ny = (int)(nyf+0.5f);
 								if (nx<0 || ny<0 || nx>=XRES || ny >=YRES)
@@ -2647,7 +2658,10 @@ int create_parts(int x, int y, int rx, int ry, int c)
 					if (((sdl_mod & (KMOD_LALT) && sdl_mod & (KMOD_CTRL))|| ((sdl_mod & (KMOD_CAPS)) && b!=WL_FANHELPER) ))
 					{
 						if (bmap[j][i]==SLALT-100)
+						{
 							b = 0;
+							if (SLALT==WL_GRAV) gravwl_timeout = 60;
+						}
 						else
 							continue;
 					}
@@ -2669,6 +2683,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 						bmap[j][i] = WL_STREAM;
 						continue;
 					}
+					if (b==0 && bmap[j][i]==WL_GRAV) gravwl_timeout = 60;
 					bmap[j][i] = b;
 				}
 			}
@@ -2782,7 +2797,7 @@ int InCurrentBrush(int i, int j, int rx, int ry)
 	switch(CURRENT_BRUSH)
 	{
 		case CIRCLE_BRUSH:
-			return ((pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1);
+			return (pow(i,2)*pow(ry,2)+pow(j,2)*pow(rx,2)<=pow(rx,2)*pow(ry,2));
 			break;
 		case SQUARE_BRUSH:
 			return (i*j<=ry*rx);

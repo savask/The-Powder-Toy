@@ -3347,7 +3347,6 @@ void draw_parts(pixel *vid)
 #ifdef OpenGL
 	glFlush ();
 #endif
-
 }
 void draw_walls(pixel *vid)
 {
@@ -3739,9 +3738,56 @@ void render_signs(pixel *vid_buf)
 		}
 }
 
-void render_fire(pixel *dst)
+void render_gravlensing(pixel *src, pixel * dst)
 {
-	int i,j,x,y,r,g,b;
+	int nx, ny, rx, ry, gx, gy, bx, by;
+	int r, g, b;
+	pixel t;
+	for(nx = 0; nx < XRES; nx++)
+	{
+		for(ny = 0; ny < YRES; ny++)
+		{
+			rx = nx-(gravxf[(ny*XRES)+nx]*0.75f);
+			ry = ny-(gravyf[(ny*XRES)+nx]*0.75f);
+			gx = nx-(gravxf[(ny*XRES)+nx]*0.875f);
+			gy = ny-(gravyf[(ny*XRES)+nx]*0.875f);
+			bx = nx-(gravxf[(ny*XRES)+nx]);
+			by = ny-(gravyf[(ny*XRES)+nx]);
+			if(rx > 0 && rx < XRES && ry > 0 && ry < YRES && gx > 0 && gx < XRES && gy > 0 && gy < YRES && bx > 0 && bx < XRES && by > 0 && by < YRES)
+			{
+				t = dst[ny*(XRES+BARSIZE)+nx];
+				r = PIXR(src[ry*(XRES+BARSIZE)+rx]) + PIXR(t);
+				g = PIXG(src[gy*(XRES+BARSIZE)+gx]) + PIXG(t);
+				b = PIXB(src[by*(XRES+BARSIZE)+bx]) + PIXB(t);
+				if (r>255)
+					r = 255;
+				if (g>255)
+					g = 255;
+				if (b>255)
+					b = 255;
+				dst[ny*(XRES+BARSIZE)+nx] = PIXRGB(r,g,b);
+				//	addpixel(dst, nx, ny, PIXR(src[ry*(XRES+BARSIZE)+rx]), PIXG(src[gy*(XRES+BARSIZE)+gx]), PIXB(src[by*(XRES+BARSIZE)+bx]), 255);
+			}
+
+			/*rx = nx+(gravxf[(ny*XRES)+nx]*0.5f);
+			ry = ny+(gravyf[(ny*XRES)+nx]*0.5f);
+			gx = nx+(gravxf[(ny*XRES)+nx]*0.75f);
+			gy = ny+(gravyf[(ny*XRES)+nx]*0.75f);
+			bx = nx+(gravxf[(ny*XRES)+nx]);
+			by = ny+(gravyf[(ny*XRES)+nx]);
+			if(rx > 0 && rx < XRES && ry > 0 && ry < YRES && gravp[ny/CELL][nx/CELL]*0.5f > -8.0f)
+				addpixel(dst, rx, ry, PIXR(src[ry*(XRES+BARSIZE)+rx]), 0, 0, 255);
+			if(gx > 0 && gx < XRES && gy > 0 && gy < YRES && gravp[ny/CELL][nx/CELL]*0.75f > -8.0f)
+				addpixel(dst, gx, gy, 0, PIXG(src[ry*(XRES+BARSIZE)+rx]), 0, 255);
+			if(bx > 0 && bx < XRES && by > 0 && by < YRES && gravp[ny/CELL][nx/CELL] > -8.0f)
+				addpixel(dst, bx, by, 0, 0, PIXB(src[ry*(XRES+BARSIZE)+rx]), 255);*/
+		}
+	}
+}
+
+void render_fire(pixel *vid)
+{
+	int i,j,x,y,r,g,b,nx,ny;
 	for (j=0; j<YRES/CELL; j++)
 		for (i=0; i<XRES/CELL; i++)
 		{
@@ -3751,7 +3797,7 @@ void render_fire(pixel *dst)
 			if (r || g || b)
 				for (y=-CELL+1; y<2*CELL; y++)
 					for (x=-CELL+1; x<2*CELL; x++)
-						addpixel(dst, i*CELL+x, j*CELL+y, r, g, b, fire_alpha[y+CELL][x+CELL]);
+						addpixel(vid, i*CELL+x, j*CELL+y, r, g, b, fire_alpha[y+CELL][x+CELL]);
 			for (y=-1; y<2; y++)
 				for (x=-1; x<2; x++)
 					if (i+x>=0 && j+y>=0 && i+x<XRES/CELL && j+y<YRES/CELL && (x || y))
@@ -4230,7 +4276,9 @@ void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 		{
 			for (j=0; j<=ry; j++)
 				for (i=0; i<=rx; i++)
-					if ((pow(i,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))<=1 && ((pow(i+1,2))/(pow(rx,2))+(pow(j,2))/(pow(ry,2))>1 || (pow(i,2))/(pow(rx,2))+(pow(j+1,2))/(pow(ry,2))>1))
+					if (pow(i,2)*pow(ry,2)+pow(j,2)*pow(rx,2)<=pow(rx,2)*pow(ry,2) &&
+					  (pow(i+1,2)*pow(ry,2)+pow(j,2)*pow(rx,2)>pow(rx,2)*pow(ry,2) ||
+					   pow(i,2)*pow(ry,2)+pow(j+1,2)*pow(rx,2)>pow(rx,2)*pow(ry,2)))
 					{
 						xor_pixel(x+i, y+j, vid);
 						if (j) xor_pixel(x+i, y-j, vid);
