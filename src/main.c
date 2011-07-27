@@ -1126,6 +1126,7 @@ void clear_sim(void)
 	memset(emap, 0, sizeof(emap));
 	memset(signs, 0, sizeof(signs));
 	memset(parts, 0, sizeof(particle)*NPART);
+	pfree = -1;
 	memset(pmap, 0, sizeof(pmap));
 	memset(pv, 0, sizeof(pv));
 	memset(vx, 0, sizeof(vx));
@@ -1137,6 +1138,8 @@ void clear_sim(void)
 	memset(gol2, 0, sizeof(gol2));
 	memset(portalp, 0, sizeof(portalp));
 	ISSPAWN1 = ISSPAWN2 = 0;
+	player[27] = 0;
+	player2[27] = 0;
 	memset(pers_bg, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 	memset(fire_bg, 0, XRES*YRES*PIXELSIZE);
 	memset(fire_r, 0, sizeof(fire_r));
@@ -1736,10 +1739,6 @@ int main(int argc, char *argv[])
 	menu_count();
 	parts = calloc(sizeof(particle), NPART);
 	cb_parts = calloc(sizeof(particle), NPART);
-	for (i=0; i<NPART-1; i++)
-		parts[i].life = i+1;
-	parts[NPART-1].life = -1;
-	pfree = 0;
 	fire_bg=calloc(XRES*YRES, PIXELSIZE);
 	init_can_move();
 	clear_sim();
@@ -2634,6 +2633,7 @@ int main(int argc, char *argv[])
 		if (y>0 && y<sdl_scale*YRES && x>0 && x<sdl_scale*XRES)
 		{
 			int cr; //cr is particle under mouse, for drawing HUD information
+			char nametext[50];
 			if (photons[y/sdl_scale][x/sdl_scale]) {
 				cr = photons[y/sdl_scale][x/sdl_scale];
 			} else {
@@ -2641,7 +2641,11 @@ int main(int argc, char *argv[])
 			}
 			if (!((cr>>8)>=NPART || !cr))
 			{
-				if (DEBUG_MODE)
+				if ((cr&0xFF)==PT_LIFE && parts[cr>>8].ctype>=0 && parts[cr>>8].ctype<NGOLALT)
+				{
+					sprintf(nametext, "%s (%s)", ptypes[cr&0xFF].name, gmenu[parts[cr>>8].ctype].name);
+				}
+				else if (DEBUG_MODE)
 				{
 					int tctype = parts[cr>>8].ctype;
 					if ((cr&0xFF)==PT_PIPE)
@@ -2651,13 +2655,23 @@ int main(int argc, char *argv[])
 					}
 					if (tctype>=PT_NUM || tctype<0 || (cr&0xFF)==PT_PHOT)
 						tctype = 0;
-					sprintf(heattext, "%s (%s), Pressure: %3.2f, Temp: %4.2f C, Life: %d", ptypes[cr&0xFF].name, ptypes[tctype].name, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
+					sprintf(nametext, "%s (%s)", ptypes[cr&0xFF].name, ptypes[tctype].name);
+				}
+				else
+				{
+					strcpy(nametext, ptypes[cr&0xFF].name);
+				}
+				if (DEBUG_MODE)
+				{
+					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
 					sprintf(coordtext, "#%d, X:%d Y:%d", cr>>8, x/sdl_scale, y/sdl_scale);
-				} else {
+				}
+				else
+				{
 #ifdef BETA
-					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d", ptypes[cr&0xFF].name, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
+					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
 #else
-					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C", ptypes[cr&0xFF].name, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f);
+					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f);
 #endif
 				}
 				if ((cr&0xFF)==PT_PHOT) wavelength_gfx = parts[cr>>8].ctype;
@@ -2987,11 +3001,6 @@ int main(int argc, char *argv[])
 						svf_description[0] = 0;
 						gravityMode = 0;
 						airMode = 0;
-
-						player2[27] = 0;
-						player[27] = 0;
-						ISSPAWN1 = 0;
-						ISSPAWN2 = 0;
 					}
 					if (x>=(XRES+BARSIZE-(510-385)) && x<=(XRES+BARSIZE-(510-476)))
 					{
@@ -3214,6 +3223,8 @@ int main(int argc, char *argv[])
 							if (!((cr>>8)>=NPART || !cr))
 							{
 								c = sl = cr&0xFF;
+								if (c==PT_LIFE)
+									c = sl = (parts[cr>>8].ctype << 8) | c;
 							}
 							else
 							{
