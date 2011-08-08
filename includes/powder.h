@@ -132,7 +132,7 @@
 #define PT_MORT 77
 #define PT_LIFE 78
 #define PT_DLAY 79
-// 80 - 89 Free
+
 #define PT_SPNG 90
 #define PT_RIME 91
 #define PT_FOG 92
@@ -196,7 +196,8 @@
 #define PT_PBCN 153
 #define PT_GPMP 154
 #define PT_CLST 155
-#define PT_NUM  156
+#define PT_WIRE 156
+#define PT_NUM  157
 
 #define R_TEMP 22
 #define MAX_TEMP 9999
@@ -208,8 +209,9 @@
 #define ST_SOLID 1
 #define ST_LIQUID 2
 #define ST_GAS 3
-
-
+/*
+   TODO: We should start to implement these.
+*/
 #define TYPE_PART			0x0001 //1 Powders
 #define TYPE_LIQUID			0x0002 //2 Liquids
 #define TYPE_SOLID			0x0004 //4 Solids
@@ -309,6 +311,8 @@ int update_MERC(UPDATE_FUNC_ARGS);
 int update_PBCN(UPDATE_FUNC_ARGS);
 int update_GPMP(UPDATE_FUNC_ARGS);
 int update_CLST(UPDATE_FUNC_ARGS);
+int update_DLAY(UPDATE_FUNC_ARGS);
+int update_WIRE(UPDATE_FUNC_ARGS);
 
 int update_MISC(UPDATE_FUNC_ARGS);
 int update_legacy_PYRO(UPDATE_FUNC_ARGS);
@@ -465,7 +469,7 @@ static const part_type ptypes[PT_NUM] =
 	{"IRON",	PIXPACK(0x707070),	0.0f,	0.00f * CFDS,	0.90f,  0.00f,  0.0f,	0.0f,	0.00f,  0.000f	* CFDS, 0,	0,		0,	1,	50,	1,	1,	100,	SC_SOLIDS,		R_TEMP+0.0f +273.15f,	251,	"Rusts with salt, can be used for electrolysis of WATR", ST_SOLID, TYPE_SOLID|PROP_CONDUCTS|PROP_LIFE_DEC|PROP_HOT_GLOW, &update_IRON},
 	{"MORT",	PIXPACK(0xE0E0E0),	0.0f,	0.00f * CFDS,	1.00f,	1.00f,	-0.99f,	0.0f,	0.01f,	0.002f	* CFDS,	0,	0,		0,	0,	0,	1,	1,	-1,		SC_CRACKER2,	R_TEMP+4.0f	+273.15f,	60,		"Steam Train.", ST_NONE, TYPE_PART, &update_MORT},
 	{"LIFE",	PIXPACK(0x0CAC00),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	0,	0,	0,	1,	100,	SC_LIFE,		9000.0f,				40,		"Game Of Life! B3/S23", ST_NONE, TYPE_SOLID|PROP_LIFE, NULL},
-	{"DLAY",	PIXPACK(0x753590),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	1,	1,	1,	1,	100,	SC_ELEC,		4.0f+273.15f,			0,		"Conducts with temperature-dependent delay. (use HEAT/COOL).", ST_SOLID, TYPE_SOLID|PROP_CONDUCTS|PROP_LIFE_DEC, NULL},
+	{"DLAY",	PIXPACK(0x753590),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	1,	1,	1,	1,	100,	SC_POWERED,		4.0f+273.15f,			0,		"Conducts with temperature-dependent delay. (use HEAT/COOL).", ST_SOLID, TYPE_SOLID, &update_DLAY},
 	/*FREE*/{"ASIM",	PIXPACK(0x0000FF),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	0,	0,	0,	0,	100,	SC_LIFE,		9000.0f,				40,		"Assimilation! B345/S4567", ST_NONE, TYPE_SOLID|PROP_LIFE, NULL},
 	/*FREE*/{"2x2",		PIXPACK(0xFFFF00),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	0,	0,	0,	0,	100,	SC_LIFE,		9000.0f,				40,		"2x2! B36/S125", ST_NONE, TYPE_SOLID|PROP_LIFE, NULL},
 	/*FREE*/{"DANI",	PIXPACK(0x00FFFF),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	0,	0,	0,	0,	100,	SC_LIFE,		9000.0f,				40,		"Day and Night! B3678/S34678", ST_NONE, TYPE_SOLID|PROP_LIFE, NULL},
@@ -542,6 +546,7 @@ static const part_type ptypes[PT_NUM] =
 	{"PBCN",	PIXPACK(0x3B1D0A),	0.0f,	0.00f * CFDS,	0.97f,	0.50f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	0,	12,	1,	1,	100,	SC_POWERED,		R_TEMP+0.0f	+273.15f,	251,	"Powered breakable clone", ST_NONE, TYPE_SOLID, &update_PBCN},
 	{"GPMP",	PIXPACK(0x0A3B3B),	0.0f,	0.00f * CFDS,	0.90f,	0.00f,	0.0f,	0.0f,	0.00f,	0.000f	* CFDS,	0,	0,		0,	1,	1,	1,	1,	100,	SC_POWERED,		0.0f		+273.15f,	0,		"Changes gravity to its temp when activated. (use HEAT/COOL).", ST_NONE, TYPE_SOLID, &update_GPMP},
 	{"CLST",	PIXPACK(0xE4A4A4),	0.7f,	0.02f * CFDS,	0.94f,	0.95f,	0.0f,	0.2f,	0.00f,	0.000f	* CFDS,	1,	0,		0,	2,	2,	1,	1,	55,		SC_POWDERS,		R_TEMP+0.0f	+273.15f,	70,		"Clay dust. Produces paste when mixed with water.", ST_SOLID, TYPE_PART, &update_CLST},	
+	{"WIRE",    PIXPACK(0xFFCC00),  0.0f,   0.00f * CFDS,   0.00f,  0.00f,  0.0f,   0.0f,   0.00f,  0.000f  * CFDS, 0,  0,      0,  0,  0,  1,  1,  0,      SC_ELEC,        R_TEMP+0.0f +273.15f,   250,    "WireWorld wires.",ST_SOLID,TYPE_SOLID,&update_WIRE}
 	//Name		Colour				Advec	Airdrag			Airloss	Loss	Collid	Grav	Diffus	Hotair			Fal	Burn	Exp	Mel	Hrd M	Use	Weight	Section			H						Ins		Description
 };
 
@@ -635,18 +640,18 @@ static part_transition ptransitions[PT_NUM] =
 	/* HSWC */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* IRON */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			1687.0f,PT_LAVA},
 	/* MORT */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/* LIFE */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/* DLAY */ {IPL,    NT,         IPH,    NT,         ITL,    NT,         ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* SPNG */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			2730.0f,PT_FIRE},
 	/* RIME */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			273.15f,PT_WATR},
 	/* FOG  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			373.15f,PT_WTRV},
@@ -691,20 +696,19 @@ static part_transition ptransitions[PT_NUM] =
 	/* SING */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* QRTZ */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			2573.15f,PT_LAVA},
 	/* PQRT */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			2573.15f,PT_LAVA},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* BOYL */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
-	/* WIND */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT}, 
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
+	/*FREE*//* GOL  */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* WIND */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* H2   */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* SOAP */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITL,	NT},
@@ -714,7 +718,7 @@ static part_transition ptransitions[PT_NUM] =
 	/* PBCN */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT},
 	/* GPMP */ {IPL,    NT,         IPH,    NT,         ITL,    NT,         ITH,	NT},
 	/* CLST */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			1256.0f,	PT_LAVA},
-	/* DLAY */ {IPL,    NT,         IPH,    NT,         ITL,    NT,         ITH,	NT},
+	/* WIRE */ {IPL,	NT,			IPH,	NT,			ITL,	NT,			ITH,	NT, PT_WIRE},
 };
 #undef IPL
 #undef IPH
@@ -786,30 +790,30 @@ typedef struct gol_menu gol_menu;
 
 static gol_menu gmenu[NGOL] = 
 {
-	{"GOL",		PIXPACK(0x0CAC00), 0, "GOL"},
-	{"HLIF",	PIXPACK(0xFF0000), 1, "GOL"},
-	{"ASIM",	PIXPACK(0x0000FF), 2, "GOL"},
-	{"2x2",		PIXPACK(0xFFFF00), 3, "GOL"},
-	{"DANI",	PIXPACK(0x00FFFF), 4, "GOL"},
-	{"AMOE",	PIXPACK(0xFF00FF), 5, "GOL"},
-	{"MOVE",	PIXPACK(0xFFFFFF), 6, "GOL"},
-	{"PGOL",	PIXPACK(0xE05010), 7, "GOL"},
-	{"DMOE",	PIXPACK(0x500000), 8, "GOL"},
-	{"34",		PIXPACK(0x500050), 9, "GOL"},
-	{"LLIF",	PIXPACK(0x505050), 10, "GOL"},
-	{"STAN",	PIXPACK(0x5000FF), 11, "GOL"},
-	{"SEED",	PIXPACK(0xFBEC7D), 12, "GOL"},
-	{"MAZE",	PIXPACK(0xA8E4A0), 13, "GOL"},
-	{"COAG",	PIXPACK(0x9ACD32), 14, "GOL"},
-	{"WALL",	PIXPACK(0x0047AB), 15, "GOL"},
-	{"GNAR",	PIXPACK(0xE5B73B), 16, "GOL"},
-	{"REPL",	PIXPACK(0x259588), 17, "GOL"},
-	{"MYST",	PIXPACK(0x0C3C00), 18, "GOL"},
-	{"LOTE",	PIXPACK(0xFF0000), 19, "GOL"},
-	{"FRG2",	PIXPACK(0x00FF00), 20, "GOL"},
-	{"STAR",	PIXPACK(0x0000FF), 21, "GOL"},
-	{"FROG",	PIXPACK(0x00AA00), 22, "GOL"},
-	{"BRAN",	PIXPACK(0xCCCC00), 23, "GOL"}
+	{"GOL",		PIXPACK(0x0CAC00), 0, "Game Of Life B3/S23"},
+	{"HLIF",	PIXPACK(0xFF0000), 1, "High Life B36/S23"},
+	{"ASIM",	PIXPACK(0x0000FF), 2, "Assimilation B345/S4567"},
+	{"2x2",		PIXPACK(0xFFFF00), 3, "2x2 B36/S125"},
+	{"DANI",	PIXPACK(0x00FFFF), 4, "Day and Night B3678/S34678"},
+	{"AMOE",	PIXPACK(0xFF00FF), 5, "Amoeba B357/S1358"},
+	{"MOVE",	PIXPACK(0xFFFFFF), 6, "'Move' particles. Does not move things.. it is a life type B368/S245"},
+	{"PGOL",	PIXPACK(0xE05010), 7, "Pseudo Life B357/S238"},
+	{"DMOE",	PIXPACK(0x500000), 8, "Diamoeba B35678/S5678"},
+	{"34",		PIXPACK(0x500050), 9, "34 B34/S34"},
+	{"LLIF",	PIXPACK(0x505050), 10, "Long Life B345/S5"},
+	{"STAN",	PIXPACK(0x5000FF), 11, "Stains B3678/S235678"},
+	{"SEED",	PIXPACK(0xFBEC7D), 12, "B2/S"},
+	{"MAZE",	PIXPACK(0xA8E4A0), 13, "B3/S12345"},
+	{"COAG",	PIXPACK(0x9ACD32), 14, "B378/S235678"},
+	{"WALL",	PIXPACK(0x0047AB), 15, "B45678/S2345"},
+	{"GNAR",	PIXPACK(0xE5B73B), 16, "B1/S1"},
+	{"REPL",	PIXPACK(0x259588), 17, "B1357/S1357"},
+	{"MYST",	PIXPACK(0x0C3C00), 18, "B3458/S05678"},
+	{"LOTE",	PIXPACK(0xFF0000), 19, "Behaves kinda like Living on the Edge S3458/B37/4"},
+	{"FRG2",	PIXPACK(0x00FF00), 20, "Like Frogs rule S124/B3/3"},
+	{"STAR",	PIXPACK(0x0000FF), 21, "Like Star Wars rule S3456/B278/6"},
+	{"FROG",	PIXPACK(0x00AA00), 22, "Frogs S12/B34/3"},
+	{"BRAN",	PIXPACK(0xCCCC00), 23, "Brian 6 S6/B246/3"}
 };
 
 static int grule[NGOL+1][10] =
@@ -931,6 +935,8 @@ static wall_type wtypes[] =
 particle portalp[CHANNELS][8][80];
 const particle emptyparticle;
 int wireless[CHANNELS][2];
+
+extern int wire_placed;
 
 extern int gravwl_timeout;
 

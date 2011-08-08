@@ -7,10 +7,13 @@
 #define PATH_SEP "/"
 #endif
  
-#define SAVE_VERSION 53
+//VersionInfoStart
+#define SAVE_VERSION 55
 #define MINOR_VERSION 0
-#define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
 #define BETA
+//VersionInfoEnd
+
+#define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
 
 #define SERVER "powdertoy.co.uk"
 
@@ -89,6 +92,7 @@ extern unsigned char ZSIZE;
 #define BRUSH_NUM 3
 
 
+//#define GRAVFFT
 //#define LUACONSOLE
 //#define PYCONSOLE
 //#define PYEXT

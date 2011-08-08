@@ -1723,6 +1723,18 @@ void draw_parts(pixel *vid)
 				if ((parts[i].ctype&7) == 7)
 					draw_line(vid, nx, ny, (int)(parts[parts[i].tmp].x+0.5f), (int)(parts[parts[i].tmp].y+0.5f), 245, 245, 220, XRES+BARSIZE);
 			}
+			
+			if(t==PT_WIRE)
+			{
+			if (parts[i].ctype==0)
+			    blendpixel(vid, nx, ny, 255, 204, 0, 255);
+			else if(parts[i].ctype==1)
+			    blendpixel(vid, nx, ny, 0, 0, 255, 255);
+			else
+			    blendpixel(vid, nx, ny, 255, 255, 255, 255);
+			
+			continue;
+			}
 
 			if (cmode!=CM_HEAT)
 			{
@@ -2854,6 +2866,31 @@ void draw_parts(pixel *vid)
 						blendpixel(vid, nx-1, ny-1, GR, GR/2, 10, 112);
 						blendpixel(vid, nx+1, ny+1, GR, GR/2, 10, 112);
 						blendpixel(vid, nx-1, ny+1, GR, GR/2, 10, 112);
+					}
+				}
+				else if (t==PT_DLAY)
+				{
+					int stage = (int)(((float)parts[i].life/(parts[i].temp-273.15))*100.0f);
+					cr = PIXR(ptypes[t].pcolors)+stage;
+					cg = PIXG(ptypes[t].pcolors)+stage;
+					cb = PIXB(ptypes[t].pcolors)+stage;
+					if(cr>255)
+						cr = 255;
+					if(cg>255)
+						cg = 255;
+					if(cb>255)
+						cb = 255;
+					vid[ny*(XRES+BARSIZE)+nx] = PIXRGB(cr, cg, cb);
+					if (cmode == CM_BLOB) {
+						blendpixel(vid, nx+1, ny, cr, cg, cb, 223);
+						blendpixel(vid, nx-1, ny, cr, cg, cb, 223);
+						blendpixel(vid, nx, ny+1, cr, cg, cb, 223);
+						blendpixel(vid, nx, ny-1, cr, cg, cb, 223);
+
+						blendpixel(vid, nx+1, ny-1, cr, cg, cb, 112);
+						blendpixel(vid, nx-1, ny-1, cr, cg, cb, 112);
+						blendpixel(vid, nx+1, ny+1, cr, cg, cb, 112);
+						blendpixel(vid, nx-1, ny+1, cr, cg, cb, 112);
 					}
 				}
 				else if (t==PT_HSWC)

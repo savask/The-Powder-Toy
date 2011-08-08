@@ -7,6 +7,8 @@
 
 int gravwl_timeout = 0;
 
+int wire_placed = 0;
+
 float player[28]; //[0] is a command cell, [3]-[18] are legs positions, [19]-[26] are accelerations, [27] shows if player was spawned
 float player2[28];
 
@@ -713,16 +715,10 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			return -1;
 		if (parts[pmap[y][x]>>8].life!=0)
 			return -1;
-		if ((pmap[y][x]&0xFF)==PT_DLAY) {
-			parts[pmap[y][x]>>8].type = PT_SPRK;
-			parts[pmap[y][x]>>8].life = (int)parts[pmap[y][x]>>8].temp;
-			parts[pmap[y][x]>>8].tmp2 = *((int*)(&parts[pmap[y][x]>>8].temp));
-		} else {
-			parts[pmap[y][x]>>8].type = PT_SPRK;
-			parts[pmap[y][x]>>8].life = 4;
-			parts[pmap[y][x]>>8].ctype = pmap[y][x]&0xFF;
-			pmap[y][x] = (pmap[y][x]&~0xFF) | PT_SPRK;
-		}
+		parts[pmap[y][x]>>8].type = PT_SPRK;
+		parts[pmap[y][x]>>8].life = 4;
+		parts[pmap[y][x]>>8].ctype = pmap[y][x]&0xFF;
+		pmap[y][x] = (pmap[y][x]&~0xFF) | PT_SPRK;
 		return pmap[y][x]>>8;
 	}
 	if (t==PT_SPAWN&&ISSPAWN1)
@@ -1037,6 +1033,7 @@ static void create_gain_photon(int pp)//photons from PHOT going through GLOW
 	parts[i].vy = parts[pp].vy;
 	parts[i].temp = parts[pmap[ny][nx] >> 8].temp;
 	parts[i].tmp = 0;
+	parts[i].pavg[0] = parts[i].pavg[1] = 0.0f;
 	photons[ny][nx] = PT_PHOT|(i<<8);
 
 	temp_bin = (int)((parts[i].temp-273.0f)*0.25f);
@@ -1073,6 +1070,7 @@ static void create_cherenkov_photon(int pp)//photons from NEUT going through GLA
 	parts[i].y = parts[pp].y;
 	parts[i].temp = parts[pmap[ny][nx] >> 8].temp;
 	parts[i].tmp = 0;
+	parts[i].pavg[0] = parts[i].pavg[1] = 0.0f;
 	photons[ny][nx] = PT_PHOT|(i<<8);
 
 	if (lr) {
@@ -1468,6 +1466,22 @@ void update_particles_i(pixel *vid, int start, int inc)
 				}
 				lolz[nx/9][ny/9]=0;
 			}
+		}
+	}
+	//wire!
+	if(wire_placed == 1)
+	{
+		wire_placed = 0;
+		for (nx=0; nx<XRES; nx++)
+		{
+			for (ny=0; ny<YRES; ny++)
+		    {
+			    r = pmap[ny][nx];
+			    if ((r>>8)>=NPART || !r)
+			        continue;
+				if(parts[r>>8].type==PT_WIRE)
+					parts[r>>8].tmp=parts[r>>8].ctype;
+		    }
 		}
 	}
 	//game of life!
@@ -1876,6 +1890,10 @@ void update_particles_i(pixel *vid, int start, int inc)
 			{
 				parts[i].temp = restrict_flt(parts[i].temp-50.0f, MIN_TEMP, MAX_TEMP);
 				ISGOL=1;//means there is a life particle on screen
+			}
+			if (t==PT_WIRE)
+			{
+				wire_placed = 1;
 			}
 			//spark updates from walls
 			if ((ptypes[t].properties&PROP_CONDUCTS) || t==PT_SPRK)

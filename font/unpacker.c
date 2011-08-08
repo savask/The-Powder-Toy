@@ -1,9 +1,11 @@
-#ifdef FONTEDITOR
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+#define INCLUDE_FONTDATA
+
+#include "font.h"
 
 #define CELLW	12
 #define CELLH	10
@@ -59,53 +61,49 @@ int save_char(int c)
     return nb;
 }
 
-char *tag = "(c) 2008 Stanislaw Skowronek";
+void load_char(int c)
+{
+    unsigned char *start = font_data + font_ptrs[c];
+    int x, y, w, b;
+
+    w = *(start ++);
+
+    if(!w)
+	return;
+
+    b = 0;
+    for(y=0; y<CELLH; y++)
+	for(x=0; x<w; x++) {
+	    font[c][y][x] = ((*start) >> b) & 3;
+	    b += 2;
+	    if(b >= 8) {
+		start ++;
+		b = 0;
+	    }
+	}
+
+    width[c] = w;
+printf("%02x: %d\n", c, w);
+}
+
+char *tag = "(c) 2011 Stanislaw Skowronek";
 
 int main(int argc, char *argv[])
 {
     FILE *f;
-    int c, p[256], n = 0;
+    int i;
 
-    memset(p, 0, 256*4);
+    for(i=0; i<sizeof(font_ptrs)/sizeof(short); i++)
+	load_char(i);
 
-    f = fopen("font.bin", "r");
-    fread(&xsize, 1, 1, f);
-    fread(&ysize, 1, 1, f);
-    fread(&base, 1, 1, f);
-    fread(&top, 1, 1, f);
-    fread(width, 1, 256, f);
-    fread(font, CELLW*CELLH, 256, f);
+    f = fopen("font.bin", "w");
+    fwrite(&xsize, 1, 1, f);
+    fwrite(&ysize, 1, 1, f);
+    fwrite(&base, 1, 1, f);
+    fwrite(&top, 1, 1, f);
+    fwrite(width, 1, 256, f);
+    fwrite(font, CELLW*CELLH, 256, f);
     fclose(f);
-
-    printf("#ifndef FONT_H_CHECK\n");
-    printf("#define FONT_H_CHECK\n");
-    
-    printf("#define FONT_H %d\n", ysize);
-    
-    printf("#ifdef INCLUDE_FONTDATA\n");
-
-    printf("char font_data[] = {\n");
-    for(c=0; c<256; c++) {
-	p[c] = n;
-	n += save_char(c);
-    }
-    printf("};\n");
-
-    printf("short font_ptrs[] = {\n");
-    for(c=0; c<256; c++) {
-	if(!(c%8))
-	    printf("    ");
-	printf("0x%04X,", p[c]);
-	if((c%8)==7)
-	    printf("\n");
-	else
-	    printf(" ");
-    }
-    printf("};\n");
-    
-    printf("#endif\n#endif\n");
 
     return 0;
 }
-
-#endif
