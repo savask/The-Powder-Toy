@@ -546,6 +546,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 	int nf=0, new_format = 0, ttv = 0;
 	particle *parts = partsptr;
 	int *fp = malloc(NPART*sizeof(int));
+	parts_lastActiveIndex = NPART-1;
 
 	//New file header uses PSv, replacing fuC. This is to detect if the client uses a new save format for temperatures
 	//This creates a problem for old clients, that display and "corrupt" error instead of a "newer version" error
@@ -1129,6 +1130,7 @@ void clear_sim(void)
 	memset(signs, 0, sizeof(signs));
 	memset(parts, 0, sizeof(particle)*NPART);
 	pfree = -1;
+	parts_lastActiveIndex = NPART-1;
 	memset(pmap, 0, sizeof(pmap));
 	memset(pv, 0, sizeof(pv));
 	memset(vx, 0, sizeof(vx));
@@ -1523,7 +1525,7 @@ int main(int argc, char *argv[])
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	fire_bg = calloc(XRES*YRES, PIXELSIZE);
 	
-	prepare_alpha();
+	prepare_alpha(4, 1.0f);
 	player[2] = player2[2] = PT_DUST;
 
 	sprintf(ppmfilename, "%s.ppm", argv[2]);
@@ -1805,7 +1807,7 @@ int main(int argc, char *argv[])
 	save_presets(0);
 
 	make_kernel();
-	prepare_alpha();
+	prepare_alpha(4, 1.0f);
 
 	stamp_init();
 
