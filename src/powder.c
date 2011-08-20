@@ -336,6 +336,9 @@ int try_move(int i, int x, int y, int nx, int ny)
 	if ((bmap[y/CELL][x/CELL]==WL_EHOLE && !emap[y/CELL][x/CELL]) && !(bmap[ny/CELL][nx/CELL]==WL_EHOLE && !emap[ny/CELL][nx/CELL]))
 		return 0;
 
+	if(parts[i].type==PT_GBMB&&parts[i].life>0)
+		return 0;
+
 	e = r >> 8; //e is now the particle number at r (pmap[ny][nx])
 	if (r && e<NPART)//the swap part, if we make it this far, swap
 	{
@@ -364,7 +367,6 @@ int try_move(int i, int x, int y, int nx, int ny)
 		parts[e].y += y-ny;
 		pmap[(int)(parts[e].y+0.5f)][(int)(parts[e].x+0.5f)] = (e<<8)|parts[e].type;
 	}
-
 	return 1;
 }
 
@@ -646,7 +648,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 	int t = tv & 0xFF;
 	int v = (tv >> 8) & 0xFF;
 	
-	if (x<0 || y<0 || x>=XRES || y>=YRES || ((t<0 || t>=PT_NUM)&&t!=SPC_HEAT&&t!=SPC_COOL&&t!=SPC_AIR&&t!=SPC_VACUUM))
+	if (x<0 || y<0 || x>=XRES || y>=YRES || ((t<0 || t>=PT_NUM)&&t!=SPC_HEAT&&t!=SPC_COOL&&t!=SPC_AIR&&t!=SPC_VACUUM&&t!=SPC_PGRV&&t!=SPC_NGRV))
 		return -1;
 	if (t>=0 && t<PT_NUM && !ptypes[t].enabled)
 		return -1;
@@ -708,9 +710,23 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 		}
 		return -1;
 	}
+	if (t==SPC_PGRV)
+	{
+	gravmap[y/CELL][x/CELL] = 5;
+	return -1;
+	}
+	if (t==SPC_NGRV)
+	{
+	gravmap[y/CELL][x/CELL] = -5;
+	return -1;
+	}
+
 
 	if (t==PT_SPRK)
 	{
+		if((pmap[y][x]&0xFF)==PT_WIRE){
+			parts[pmap[y][x]>>8].ctype=PT_DUST;
+		}
 		if ((pmap[y][x]>>8)>=NPART || !((pmap[y][x]&0xFF)==PT_INST||(ptypes[pmap[y][x]&0xFF].properties&PROP_CONDUCTS)))
 			return -1;
 		if (parts[pmap[y][x]>>8].life!=0)
@@ -914,27 +930,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			parts[i].life = 100;
 			parts[i].ctype = 0;
 			parts[i].temp = ptypes[t].heat;
-
-			player[3] = x-1;  //Setting legs positions
-			player[4] = y+6;
-			player[5] = x-1;
-			player[6] = y+6;
-
-			player[7] = x-3;
-			player[8] = y+12;
-			player[9] = x-3;
-			player[10] = y+12;
-
-			player[11] = x+1;
-			player[12] = y+6;
-			player[13] = x+1;
-			player[14] = y+6;
-
-			player[15] = x+3;
-			player[16] = y+12;
-			player[17] = x+3;
-			player[18] = y+12;
-
+			STKM_init_legs(player, i);
 			player[27] = 1;
 		}
 		else
@@ -956,27 +952,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			parts[i].life = 100;
 			parts[i].ctype = 0;
 			parts[i].temp = ptypes[t].heat;
-
-			player2[3] = x-1;  //Setting legs positions
-			player2[4] = y+6;
-			player2[5] = x-1;
-			player2[6] = y+6;
-
-			player2[7] = x-3;
-			player2[8] = y+12;
-			player2[9] = x-3;
-			player2[10] = y+12;
-
-			player2[11] = x+1;
-			player2[12] = y+6;
-			player2[13] = x+1;
-			player2[14] = y+6;
-
-			player2[15] = x+3;
-			player2[16] = y+12;
-			player2[17] = x+3;
-			player2[18] = y+12;
-
+			STKM_init_legs(player2, i);
 			player2[27] = 1;
 		}
 		else
@@ -2663,7 +2639,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 	{
 		if (wall==r)
 		{
-			if (c == SPC_AIR || c == SPC_HEAT || c == SPC_COOL || c == SPC_VACUUM)
+			if (c == SPC_AIR || c == SPC_HEAT || c == SPC_COOL || c == SPC_VACUUM || c == SPC_PGRV || c == SPC_NGRV)
 				break;
 			if (wall == WL_ERASE)
 				b = 0;
@@ -2748,7 +2724,7 @@ int create_parts(int x, int y, int rx, int ry, int c)
 	}
 
 	//why do these need a special if
-	if (c == SPC_AIR || c == SPC_HEAT || c == SPC_COOL || c == SPC_VACUUM)
+	if (c == SPC_AIR || c == SPC_HEAT || c == SPC_COOL || c == SPC_VACUUM || c == SPC_PGRV || c == SPC_NGRV)
 	{
 		if (rx==0&&ry==0)
 		{

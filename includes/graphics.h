@@ -82,6 +82,8 @@ int drawchar(pixel *vid, int x, int y, int c, int r, int g, int b, int a);
 
 int drawtext(pixel *vid, int x, int y, const char *s, int r, int g, int b, int a);
 
+int drawtext_outline(pixel *vid, int x, int y, const char *s, int r, int g, int b, int a, int or, int og, int ob, int oa);
+
 int drawtextwrap(pixel *vid, int x, int y, int w, const char *s, int r, int g, int b, int a);
 
 void drawrect(pixel *vid, int x, int y, int w, int h, int r, int g, int b, int a);
@@ -126,6 +128,8 @@ void xor_line(int x1, int y1, int x2, int y2, pixel *vid);
 
 void xor_rect(pixel *vid, int x, int y, int w, int h);
 
+void blend_line(pixel *vid, int x1, int y1, int x2, int y2, int r, int g, int b, int a);
+
 void draw_parts(pixel *vid);
 
 void draw_walls(pixel *vid);
@@ -159,6 +163,8 @@ int render_thumb(void *thumb, int size, int bzip2, pixel *vid_buf, int px, int p
 void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry);
 
 int sdl_open(void);
+
+int draw_debug_info(pixel* vid, int lm, int lx, int ly, int cx, int cy, int line_x, int line_y);
 
 #ifdef OpenGL
 void Enable2D ();
