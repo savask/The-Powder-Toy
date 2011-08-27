@@ -150,7 +150,7 @@ int eval_move(int pt, int nx, int ny, unsigned *rr)
 		return 0;
 
 	r = pmap[ny][nx];
-	if (r && (r>>8)<NPART)
+	if (r)
 		r = (r&~0xFF) | parts[r>>8].type;
 	if (rr)
 		*rr = r;
@@ -175,8 +175,9 @@ int eval_move(int pt, int nx, int ny, unsigned *rr)
 			return 0;
 		if (bmap[ny/CELL][nx/CELL]==WL_ALLOWSOLID && ptypes[pt].falldown!=1)
 			return 0;
-		// blocking by WL_WALL, WL_WALLELEC and unpowered WL_EWALL is currently done by putting 0x7FFFFFFF in pmap
-		if (bmap[ny/CELL][nx/CELL]==WL_ALLOWAIR)
+		if (bmap[ny/CELL][nx/CELL]==WL_ALLOWAIR || bmap[ny/CELL][nx/CELL]==WL_WALL || bmap[ny/CELL][nx/CELL]==WL_WALLELEC)
+			return 0;
+		if (bmap[ny/CELL][nx/CELL]==WL_EWALL && !emap[ny/CELL][nx/CELL])
 			return 0;
 		if (bmap[ny/CELL][nx/CELL]==WL_EHOLE && !emap[ny/CELL][nx/CELL])
 			return 2;
@@ -329,13 +330,12 @@ int try_move(int i, int x, int y, int nx, int ny)
 		return 0;
 
 	e = r >> 8; //e is now the particle number at r (pmap[ny][nx])
-	if (r && e<NPART)//the swap part, if we make it this far, swap
+	if (r)//the swap part, if we make it this far, swap
 	{
 		if (parts[i].type==PT_NEUT) {
 			// target material is NEUTPENETRATE, meaning it gets moved around when neutron passes
 			unsigned s = pmap[y][x];
-			if ((s>>8)>=NPART) return 0;
-			if ((s&0xFF) && (s&0xFF)<PT_NUM && !(ptypes[s&0xFF].properties&PROP_NEUTPENETRATE))
+			if (!(ptypes[s&0xFF].properties&PROP_NEUTPENETRATE))
 				return 1; // if the element currently underneath neutron isn't NEUTPENETRATE, don't move anything except the neutron
 			// if nothing is currently underneath neutron, only move target particle
 			if (s)
@@ -716,7 +716,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 		if((pmap[y][x]&0xFF)==PT_WIRE){
 			parts[pmap[y][x]>>8].ctype=PT_DUST;
 		}
-		if ((pmap[y][x]>>8)>=NPART || !((pmap[y][x]&0xFF)==PT_INST||(ptypes[pmap[y][x]&0xFF].properties&PROP_CONDUCTS)))
+		if (!((pmap[y][x]&0xFF)==PT_INST||(ptypes[pmap[y][x]&0xFF].properties&PROP_CONDUCTS)))
 			return -1;
 		if (parts[pmap[y][x]>>8].life!=0)
 			return -1;
@@ -1072,7 +1072,7 @@ inline void delete_part(int x, int y, int flags)//calls kill_part with the parti
 		i = pmap[y][x];
 	}
 
-	if (!i || (i>>8)>=NPART)
+	if (!i)
 		return;
 	if (!(flags&BRUSH_SPECIFIC_DELETE) || parts[i>>8].type==SLALT || SLALT==0)//specific deletiom
 	{
@@ -1195,7 +1195,7 @@ inline int parts_avg(int ci, int ni,int t)
 	if (t==PT_INSL)//to keep electronics working
 	{
 		int pmr = pmap[((int)(parts[ci].y+0.5f) + (int)(parts[ni].y+0.5f))/2][((int)(parts[ci].x+0.5f) + (int)(parts[ni].x+0.5f))/2];
-		if ((pmr>>8) < NPART && pmr)
+		if (pmr)
 			return parts[pmr>>8].type;
 		else
 			return PT_NONE;
@@ -1203,7 +1203,7 @@ inline int parts_avg(int ci, int ni,int t)
 	else
 	{
 		int pmr2 = pmap[(int)((parts[ci].y + parts[ni].y)/2+0.5f)][(int)((parts[ci].x + parts[ni].x)/2+0.5f)];//seems to be more accurate.
-		if ((pmr2>>8) < NPART && pmr2)
+		if (pmr2)
 		{
 			if (parts[pmr2>>8].type==t)
 				return t;
@@ -1344,7 +1344,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			for (nx=0; nx<XRES-4; nx++)
 			{
 				r=pmap[ny][nx];
-				if ((r>>8)>=NPART || !r)
+				if (!r)
 				{
 					continue;
 				}
@@ -1369,10 +1369,6 @@ void update_particles_i(pixel *vid, int start, int inc)
 							if (ny+nny>0&&ny+nny<YRES&&nx+nnx>=0&&nx+nnx<XRES)
 							{
 								rt=pmap[ny+nny][nx+nnx];
-								if ((rt>>8)>=NPART)
-								{
-									continue;
-								}
 								if (!rt&&loverule[nnx][nny]==1)
 									create_part(-1,nx+nnx,ny+nny,PT_LOVE);
 								else if (!rt)
@@ -1394,7 +1390,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			for (nx=0; nx<XRES-4; nx++)
 			{
 				r=pmap[ny][nx];
-				if ((r>>8)>=NPART || !r)
+				if (!r)
 				{
 					continue;
 				}
@@ -1419,10 +1415,6 @@ void update_particles_i(pixel *vid, int start, int inc)
 							if (ny+nny>0&&ny+nny<YRES&&nx+nnx>=0&&nx+nnx<XRES)
 							{
 								rt=pmap[ny+nny][nx+nnx];
-								if ((rt>>8)>=NPART)
-								{
-									continue;
-								}
 								if (!rt&&lolzrule[nny][nnx]==1)
 									create_part(-1,nx+nnx,ny+nny,PT_LOLZ);
 								else if (!rt)
@@ -1446,7 +1438,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			for (ny=0; ny<YRES; ny++)
 		    {
 			    r = pmap[ny][nx];
-			    if ((r>>8)>=NPART || !r)
+			    if (!r)
 			        continue;
 				if(parts[r>>8].type==PT_WIRE)
 					parts[r>>8].tmp=parts[r>>8].ctype;
@@ -1464,7 +1456,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			for (ny=CELL; ny<YRES-CELL; ny++)
 			{
 				r = pmap[ny][nx];
-				if ((r>>8)>=NPART || !r)
+				if (!r)
 				{
 					gol[nx][ny] = 0;
 					continue;
@@ -1510,7 +1502,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			{
 				r = pmap[ny][nx];
 				neighbors = gol2[nx][ny][0];
-				if (neighbors==0 || !((r&0xFF)==PT_LIFE || !(r&0xFF)) || (r>>8)>=NPART)
+				if (neighbors==0 || !((r&0xFF)==PT_LIFE || !(r&0xFF)))
 					continue;
 				for ( golnum = 1; golnum<=NGOL; golnum++)
 				{
@@ -1689,7 +1681,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 			{
 				if (y-2 >= 0 && y-2 < YRES && (ptypes[t].properties&TYPE_LIQUID)) {//some heat convection for liquids
 					r = pmap[y-2][x];
-					if (!((r>>8)>=NPART || !r || parts[i].type != (r&0xFF))) {
+					if (!(!r || parts[i].type != (r&0xFF))) {
 						if (parts[i].temp>parts[r>>8].temp) {
 							swappage = parts[i].temp;
 							parts[i].temp = parts[r>>8].temp;
@@ -1720,7 +1712,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 					{
 						surround_hconduct[j] = i;
 						r = surround[j];
-						if ((r>>8)>=NPART || !r)
+						if (!r)
 							continue;
 						rt = r&0xFF;
 						if (rt&&ptypes[rt].hconduct&&(rt!=PT_HSWC||parts[r>>8].life==10)
@@ -2423,16 +2415,15 @@ void update_particles(pixel *vid)//doesn't update the particles themselves, but 
 		else parts[lastPartUnused].life = parts_lastActiveIndex+1;
 	}
 	parts_lastActiveIndex = lastPartUsed;
-	for (y=0; y<YRES/CELL; y++)
+	if (!sys_pause||framerender)
 	{
-		for (x=0; x<XRES/CELL; x++)
+		for (y=0; y<YRES/CELL; y++)
 		{
-			if (bmap[y][x]==WL_WALL || bmap[y][x]==WL_WALLELEC || (bmap[y][x]==WL_EWALL&&!emap[y][x]))
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						pmap[y*CELL+j][x*CELL+i] = 0x7FFFFFFF;
-			if (emap[y][x] && (!sys_pause||framerender))
-				emap[y][x] --;
+			for (x=0; x<XRES/CELL; x++)
+			{
+				if (emap[y][x])
+					emap[y][x] --;
+			}
 		}
 	}
 
@@ -2648,11 +2639,12 @@ int create_parts(int x, int y, int rx, int ry, int c, int flags)
 	}
 	if (dw==1)
 	{
+		ry = ry/CELL;
 		rx = rx/CELL;
 		x = x/CELL;
 		y = y/CELL;
 		x -= rx/2;
-		y -= rx/2;
+		y -= ry/2;
 		for (ox=x; ox<=x+rx; ox++)
 		{
 			for (oy=y; oy<=y+rx; oy++)
@@ -2679,7 +2671,7 @@ int create_parts(int x, int y, int rx, int ry, int c, int flags)
 					if (b==WL_STREAM)
 					{
 						i = x + rx/2;
-						j = y + rx/2;
+						j = y + ry/2;
 						for (v=-1; v<2; v++)
 							for (u=-1; u<2; u++)
 								if (i+u>=0 && i+u<XRES/CELL &&
@@ -2866,7 +2858,7 @@ void create_line(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flag
 		if (e >= 0.5f)
 		{
 			y += sy;
-			if (c==WL_EHOLE || c==WL_ALLOWGAS || c==WL_ALLOWALLELEC || c==WL_ALLOWSOLID || c==WL_ALLOWAIR || c==WL_WALL || c==WL_DESTROYALL || c==WL_ALLOWLIQUID || c==WL_FAN || c==WL_STREAM || c==WL_DETECT || c==WL_EWALL || c==WL_WALLELEC || !(rx+ry))
+			if (c==WL_EHOLE+100 || c==WL_ALLOWGAS+100 || c==WL_ALLOWALLELEC+100 || c==WL_ALLOWSOLID+100 || c==WL_ALLOWAIR+100 || c==WL_WALL+100 || c==WL_DESTROYALL+100 || c==WL_ALLOWLIQUID+100 || c==WL_FAN+100 || c==WL_STREAM+100 || c==WL_DETECT+100 || c==WL_EWALL+100 || c==WL_WALLELEC+100 || !(rx+ry))
 			{
 				if (cp)
 					create_parts(y, x, rx, ry, c, flags);

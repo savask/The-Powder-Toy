@@ -1,3 +1,4 @@
+#include <defines.h>
 #ifdef LUACONSOLE
 #include <powder.h>
 #include <console.h>
@@ -60,6 +61,7 @@ void luacon_open(){
 		{"setfire", &luatpt_setfire},
 		{"setdebug", &luatpt_setdebug},
 		{"setfpscap",&luatpt_setfpscap},
+		{"getscript",&luatpt_getscript},
 		{NULL,NULL}
 	};
 
@@ -502,7 +504,7 @@ int luatpt_set_property(lua_State* l)
 		for (nx = x; nx<x+w; nx++)
 			for (ny = y; ny<y+h; ny++){
 				r = pmap[ny][nx];
-				if (!r || (r>>8) >= NPART || (partsel && partsel != parts[r>>8].type))
+				if (!r || (partsel && partsel != parts[r>>8].type))
 				{
 					r = photons[ny][nx];
 					if (!r || (partsel && partsel != parts[r>>8].type))
@@ -521,9 +523,9 @@ int luatpt_set_property(lua_State* l)
 			if (i>=XRES || y>=YRES)
 				return luaL_error(l, "Coordinates out of range (%d,%d)", i, y);
 			r = pmap[y][i];
-			if (!r || (r>>8)>=NPART || (partsel && partsel != parts[r>>8].type))
+			if (!r || (partsel && partsel != parts[r>>8].type))
 				r = photons[y][i];
-			if (!r || (r>>8)>=NPART || (partsel && partsel != parts[r>>8].type))
+			if (!r || (partsel && partsel != parts[r>>8].type))
 				return 0;
 			i = r>>8;
 		}
@@ -551,9 +553,9 @@ int luatpt_get_property(lua_State* l)
 	y = luaL_optint(l, 3, -1);
 	if(y!=-1 && y < YRES && y >= 0 && i < XRES && i >= 0){
 		r = pmap[y][i];
-		if (!r || (r>>8)>=NPART)
+		if (!r)
 			r = photons[y][i];
-		if (!r || (r>>8)>=NPART)
+		if (!r)
 		{
 			if (strcmp(prop,"type")==0){
 				lua_pushinteger(l, 0);
@@ -1067,5 +1069,92 @@ int luatpt_setfpscap(lua_State* l)
 int fpscap = luaL_optint(l, 1, 0);
 limitFPS = fpscap;
 return 0;
+}
+int luatpt_getscript(lua_State* l)
+{
+	char *fileid = NULL, *filedata = NULL, *fileuri = NULL, *fileauthor = NULL, *filename = NULL, *lastError = NULL, *luacommand = NULL;
+	int len, ret,run_script;
+	FILE * outputfile;
+
+	fileauthor = mystrdup(luaL_optstring(l, 1, ""));
+	fileid = mystrdup(luaL_optstring(l, 2, ""));
+	run_script = luaL_optint(l, 3, 0);
+	if(!fileauthor || !fileid || strlen(fileauthor)<1 || strlen(fileid)<1)
+		goto fin;
+	if(!confirm_ui(vid_buf, "Do you want to install script?", fileid, "Install"))
+		goto fin;
+
+	fileuri = malloc(strlen(SCRIPTSERVER)+strlen(fileauthor)+strlen(fileid)+44);
+	sprintf(fileuri, "http://" SCRIPTSERVER "/GetScript.api?Author=%s&Filename=%s", fileauthor, fileid);
+	
+	filedata = http_auth_get(fileuri, svf_user_id, NULL, svf_session_id, &ret, &len);
+	
+	if(len <= 0 || !filedata)
+	{
+		lastError = "Server did not return data.";
+		goto fin;
+	}
+	if(ret != 200)
+	{
+		lastError = http_ret_text(ret);
+		goto fin;
+	}
+	
+	filename = malloc(strlen(fileauthor)+strlen(fileid)+strlen(PATH_SEP)+strlen(LOCAL_LUA_DIR)+6);
+	sprintf(filename, LOCAL_LUA_DIR PATH_SEP "%s_%s.lua", fileauthor, fileid);
+	
+#ifdef WIN32
+	_mkdir(LOCAL_LUA_DIR);
+#else
+	mkdir(LOCAL_LUA_DIR, 0755);
+#endif
+	
+	outputfile = fopen(filename, "r");
+	if(outputfile)
+	{
+		fclose(outputfile);
+		outputfile = NULL;
+		if(confirm_ui(vid_buf, "File already exists, overwrite?", filename, "Overwrite"))
+		{
+			outputfile = fopen(filename, "w");
+		}
+		else
+		{
+			goto fin;
+		}
+	}
+	else
+	{
+		outputfile = fopen(filename, "w");
+	}
+	
+	if(!outputfile)
+	{
+		lastError = "Unable to write to file";
+		goto fin;
+	}
+	
+	
+	fputs(filedata, outputfile);
+	fclose(outputfile);
+	outputfile = NULL;
+	if(run_script)
+	{
+    luacommand = malloc(strlen(filename)+20);
+    sprintf(luacommand,"dofile(\"%s\")",filename);
+    luacon_eval(luacommand);
+    }
+    
+fin:
+	if(fileid) free(fileid);
+	if(filedata) free(filedata);
+	if(fileuri) free(fileuri);
+	if(fileauthor) free(fileauthor);
+	if(filename) free(filename);
+	if(luacommand) free(luacommand);
+	luacommand = NULL;
+		
+	if(lastError) return luaL_error(l, lastError);
+	return 0;
 }
 #endif

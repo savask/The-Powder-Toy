@@ -2138,6 +2138,17 @@ void draw_parts(pixel *vid)
 					cb = cb>255?255:cb;
 					blendpixel(vid, nx, ny, cr, cg, cb, 255);
 				}
+				else if (t==PT_CBNW)
+				{
+					int z = parts[i].tmp2 - 20;//speckles!
+					cr = z * 1 + PIXR(ptypes[t].pcolors);
+					cg = z * 2 + PIXG(ptypes[t].pcolors);
+					cb = z * 8 + PIXB(ptypes[t].pcolors);
+					cr = cr>255?255:cr;
+					cg = cg>255?255:cg;
+					cb = cb>255?255:cb;
+					blendpixel(vid, nx, ny, cr, cg, cb, 255);
+				}
 				else if (t==PT_SPNG)
 				{
 					cr = PIXR(ptypes[t].pcolors) - parts[i].life*15;
@@ -3874,7 +3885,7 @@ void create_decorations(int x, int y, int rx, int ry, int r, int g, int b, int c
 	if (rx==0 && ry==0)
 	{
 		rp = pmap[y][x];
-		if ((rp>>8)>=NPART || !rp)
+		if (!rp)
 			return;
 		if (click == 4)
 			parts[rp>>8].dcolour = 0;
@@ -3887,7 +3898,7 @@ void create_decorations(int x, int y, int rx, int ry, int r, int g, int b, int c
 			if(y+j>=0 && x+i>=0 && x+i<XRES && y+j<YRES)
 				if (InCurrentBrush(i, j, rx, ry)){
 					rp = pmap[y+j][x+i];
-					if ((rp>>8)>=NPART || !rp)
+					if (!rp)
 						continue;
 					if (click == 4)
 						parts[rp>>8].dcolour = 0;
@@ -4017,7 +4028,7 @@ void render_signs(pixel *vid_buf)
 			}
 			if (strcmp(signs[i].text, "{t}")==0)
 			{
-				if ((pmap[signs[i].y][signs[i].x]>>8)>0 && (pmap[signs[i].y][signs[i].x]>>8)<NPART)
+				if (pmap[signs[i].y][signs[i].x])
 					sprintf(buff, "Temp: %4.2f", parts[pmap[signs[i].y][signs[i].x]>>8].temp-273.15);  //...tempirature
 				else
 					sprintf(buff, "Temp: 0.00");  //...tempirature
