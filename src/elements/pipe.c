@@ -45,7 +45,7 @@ void pushParticle(int i, int count, int original)
 	}
 	else //predefined 1 pixel thick pipe movement
 	{
-		int coords = 7 - (parts[i].tmp>>10);
+		int coords = 7 - ((parts[i].tmp>>10)&7);
 		r = pmap[y+ pos_1_ry[coords]][x+ pos_1_rx[coords]];
 		if (!r)
 		{
@@ -139,8 +139,8 @@ int update_PIPE(UPDATE_FUNC_ARGS) {
 							parts[np].life = parts[i].flags;
 							parts[np].tmp = parts[i].pavg[0];
 							parts[np].ctype = parts[i].pavg[1];
+							parts[i].tmp &= ~0xFF;
 						}
-						parts[i].tmp &= ~0xFF;
 					}
 					//try eating particle at entrance
 					else if ((parts[i].tmp&0xFF) == 0 && (ptypes[r&0xFF].falldown!= 0 || ptypes[r&0xFF].state == ST_GAS))
@@ -151,6 +151,16 @@ int update_PIPE(UPDATE_FUNC_ARGS) {
 						parts[i].pavg[0] = parts[r>>8].tmp;
 						parts[i].pavg[1] = parts[r>>8].ctype;
 						kill_part(r>>8);
+					}
+					else if ((parts[i].tmp&0xFF) == 0 && (r&0xFF)==PT_STOR && parts[r>>8].tmp && (ptypes[parts[r>>8].tmp].falldown!= 0 || ptypes[parts[r>>8].tmp].state == ST_GAS))
+					{
+						parts[i].tmp =  parts[r>>8].tmp;
+						parts[i].temp = parts[r>>8].temp;
+						parts[i].flags = parts[r>>8].flags;
+						parts[i].pavg[0] = parts[r>>8].pavg[0];
+						parts[i].pavg[1] = parts[r>>8].pavg[1];
+						parts[r>>8].tmp = 0;
+						parts[r>>8].life = 0;
 					}
 				}
 			}

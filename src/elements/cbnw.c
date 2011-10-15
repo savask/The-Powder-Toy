@@ -3,6 +3,21 @@
 int update_CBNW(UPDATE_FUNC_ARGS) {
 	int r, rx, ry, oldt;
 	oldt = parts[i].tmp;
+    if (pv[y/CELL][x/CELL]<=3)
+    {
+        if(20>(rand()%80000))
+    	{
+            part_change_type(i,x,y,PT_CO2);
+           	parts[i].ctype = 5;
+        	pv[y/CELL][x/CELL] += 0.5f;
+        }
+        else if(pv[y/CELL][x/CELL]<=-0.5)
+    	{
+            part_change_type(i,x,y,PT_CO2);
+           	parts[i].ctype = 5;
+        	pv[y/CELL][x/CELL] += 0.5f;
+        }
+	}
 	if (parts[i].tmp>0)
 		parts[i].tmp--;
 	if(!(rand()%200))
@@ -14,12 +29,11 @@ int update_CBNW(UPDATE_FUNC_ARGS) {
 	if(oldt==1)
 	{
 		//Explode
-		if(!(rand()%2))
+		if(rand()%4)
 		{
-			part_change_type(i,x,y,PT_WATR);
-		} else {
-			pv[y/CELL][x/CELL] += 0.5f;
-			part_change_type(i,x,y,PT_CO2);
+            part_change_type(i,x,y,PT_CO2);
+           	parts[i].ctype = 5;
+        	pv[y/CELL][x/CELL] += 0.2f;
 		}
 	}
 	for (rx=-2; rx<3; rx++)
@@ -27,12 +41,21 @@ int update_CBNW(UPDATE_FUNC_ARGS) {
 			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 			{
 				r = pmap[y+ry][x+rx];
-				if ((r>>8)>=NPART || !r)
+				if (!r)
 					continue;
-				if ((r&0xFF)==PT_SALT && parts[i].tmp == 0 && 1>(rand()%250))
+				if (ptypes[r&0xFF].properties&TYPE_PART && parts[i].tmp == 0 && 1>(rand()%250))
 				{
 					//Start explode
-					parts[i].tmp = (rand()%100)+50;
+					parts[i].tmp = rand()%25;//(rand()%100)+50;
+				}
+				else if(ptypes[r&0xFF].properties&TYPE_SOLID && (r&0xFF)!=PT_DMND && (r&0xFF)!=PT_GLAS && parts[i].tmp == 0 && (2-pv[y/CELL][x/CELL])>(rand()%20000))
+				{
+					if(rand()%2)
+					{
+                        part_change_type(i,x,y,PT_CO2);
+                       	parts[i].ctype = 5;
+                    	pv[y/CELL][x/CELL] += 0.2f;
+					}
 				}
 				if ((r&0xFF)==PT_CBNW)
 				{
@@ -61,11 +84,6 @@ int update_CBNW(UPDATE_FUNC_ARGS) {
 							return 1;
 						}
 				}
-				/*if ((r&0xFF)==PT_CNCT && 1>(rand()%500))	Concrete+Water to paste, not very popular
-				{
-					part_change_type(i,x,y,PT_PSTE);
-					kill_part(r>>8);
-				}*/
 			}
 	return 0;
 }

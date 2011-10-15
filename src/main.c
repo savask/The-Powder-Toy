@@ -151,9 +151,9 @@ static const char *it_msg =
     "The spacebar can be used to pause physics.\n"
     "'P' will take a screenshot and save it into the current directory.\n"
     "\n"
-    "\bgCopyright (c) 2008-11 Stanislaw K Skowronek (\brhttp://powder.unaligned.org\bg, \bbirc.unaligned.org #wtf\bg)\n"
-    "\bgCopyright (c) 2010-11 Simon Robertshaw, Skresanov Savely, cracker64, Bryan Hoyle, Nathan Cousins, jacksonmj,\n"
-	"                      Lieuwe Mosch\n"
+    "Contributors: \bgStanislaw K Skowronek (\brhttp://powder.unaligned.org\bg, \bbirc.unaligned.org #wtf\bg),\n"
+    "\bgSimon Robertshaw, Skresanov Savely, cracker64, Catelite, Bryan Hoyle, Nathan Cousins, jacksonmj,\n"
+	"\bgLieuwe Mosch, Anthony Boot, Matthew Miller, MaksProg\n"
     "\n"
     "\bgTo use online features such as saving, you need to register at: \brhttp://powdertoy.co.uk/Register.html"
     ;
@@ -164,9 +164,7 @@ typedef struct
 	pixel *vid;
 } upstruc;
 
-#ifdef BETA
 static const char *old_ver_msg_beta = "A new beta is available - click here!";
-#endif
 static const char *old_ver_msg = "A new version is available - click here!";
 char new_message_msg[255];
 float mheat = 0.0f;
@@ -181,6 +179,7 @@ int decorations_enable = 1;
 int hud_enable = 1;
 int active_menu = 0;
 int framerender = 0;
+int pretty_powder = 0;
 int amd = 1;
 int FPSB = 0;
 int MSIGN =-1;
@@ -479,7 +478,7 @@ void *build_save(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h, un
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
-		if (i && (parts[i-1].type==PT_CLNE || parts[i-1].type==PT_PCLN || parts[i-1].type==PT_BCLN || parts[i-1].type==PT_SPRK || parts[i-1].type==PT_LAVA || parts[i-1].type==PT_PIPE || parts[i-1].type==PT_LIFE || parts[i-1].type==PT_PBCN || parts[i-1].type==PT_WIRE))
+		if (i && (parts[i-1].type==PT_CLNE || parts[i-1].type==PT_PCLN || parts[i-1].type==PT_BCLN || parts[i-1].type==PT_SPRK || parts[i-1].type==PT_LAVA || parts[i-1].type==PT_PIPE || parts[i-1].type==PT_LIFE || parts[i-1].type==PT_PBCN || parts[i-1].type==PT_WIRE || parts[i-1].type==PT_STOR || parts[i-1].type==PT_CONV))
 			d[p++] = parts[i-1].ctype;
 	}
 
@@ -637,7 +636,8 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 	m = calloc(XRES*YRES, sizeof(int));
 
 	// make a catalog of free parts
-	memset(pmap, 0, sizeof(pmap));
+	//memset(pmap, 0, sizeof(pmap)); "Using sizeof for array given as function argument returns the size of pointer."
+	memset(pmap, 0, sizeof(unsigned)*(XRES*YRES));
 	for (i=0; i<NPART; i++)
 		if (parts[i].type)
 		{
@@ -963,7 +963,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		int gnum = 0;
 		i = m[j];
 		ty = d[pty+j];
-		if (i && (ty==PT_CLNE || (ty==PT_PCLN && ver>=43) || (ty==PT_BCLN && ver>=44) || (ty==PT_SPRK && ver>=21) || (ty==PT_LAVA && ver>=34) || (ty==PT_PIPE && ver>=43) || (ty==PT_LIFE && ver>=51) || (ty==PT_PBCN && ver>=52) || (ty==PT_WIRE && ver>=55)))
+		if (i && (ty==PT_CLNE || (ty==PT_PCLN && ver>=43) || (ty==PT_BCLN && ver>=44) || (ty==PT_SPRK && ver>=21) || (ty==PT_LAVA && ver>=34) || (ty==PT_PIPE && ver>=43) || (ty==PT_LIFE && ver>=51) || (ty==PT_PBCN && ver>=52) || (ty==PT_WIRE && ver>=55) || (ty==PT_STOR && ver>=59) || (ty==PT_CONV && ver>=60)))
 		{
 			if (p >= size)
 				goto corrupt;
@@ -1114,7 +1114,6 @@ void clear_sim(void)
 	player[27] = 0;
 	player2[27] = 0;
 	memset(pers_bg, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
-	memset(fire_bg, 0, XRES*YRES*PIXELSIZE);
 	memset(fire_r, 0, sizeof(fire_r));
 	memset(fire_g, 0, sizeof(fire_g));
 	memset(fire_b, 0, sizeof(fire_b));
@@ -1369,7 +1368,7 @@ int thumb_cache_find(char *id, void **thumb, int *size)
 
 char http_proxy_string[256] = "";
 
-unsigned char last_major=0, last_minor=0, update_flag=0;
+unsigned char last_major=0, last_minor=0, last_build=0, update_flag=0;
 
 char *tag = "(c) 2008-9 Stanislaw Skowronek";
 int itc = 0;
@@ -1451,6 +1450,7 @@ void start_grav_async()
 {
 	if(!ngrav_enable){
 		gravthread_done = 0;
+		grav_ready = 0;
 		pthread_mutex_init (&gravmutex, NULL);
 		pthread_cond_init(&gravcv, NULL);
 		pthread_create(&gravthread, NULL, update_grav_async, NULL); //Start asynchronous gravity simulation
@@ -1492,10 +1492,10 @@ int main(int argc, char *argv[])
 	pfree = 0;
 
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
-	fire_bg = calloc(XRES*YRES, PIXELSIZE);
 	
 	prepare_alpha(4, 1.0f);
 	player[2] = player2[2] = PT_DUST;
+	player[28] = player2[28] = 0;
 
 	sprintf(ppmfilename, "%s.ppm", argv[2]);
 	sprintf(ptifilename, "%s.pti", argv[2]);
@@ -1566,12 +1566,8 @@ int main(int argc, char *argv[])
 #else
 int main(int argc, char *argv[])
 {
-	limitFPS = 60;
 	pixel *part_vbuf; //Extra video buffer
 	pixel *part_vbuf_store;
-#ifdef BETA
-	int is_beta = 0;
-#endif
 	char uitext[512] = "";
 	char heattext[256] = "";
 	char coordtext[128] = "";
@@ -1580,7 +1576,7 @@ int main(int argc, char *argv[])
 	void *http_ver_check, *http_session_check = NULL;
 	char *ver_data=NULL, *check_data=NULL, *tmp;
 	//char console_error[255] = "";
-	int result, i, j, bq, bc, fire_fc=0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, old_ver_len, new_message_len=0;
+	int result, i, j, bq, bc, fire_fc=0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, buildnum, is_beta = 0, old_ver_len, new_message_len=0;
 #ifdef INTERNAL
 	int vs = 0;
 #endif
@@ -1592,13 +1588,14 @@ int main(int argc, char *argv[])
 	void *load_data=NULL;
 	pixel *load_img=NULL;//, *fbi_img=NULL;
 	int save_mode=0, save_x=0, save_y=0, save_w=0, save_h=0, copy_mode=0;
-	unsigned int hsvSave = PIXRGB(0,255,127);//this is hsv format
+	unsigned int rgbSave = PIXRGB(127,0,0);
 	SDL_AudioSpec fmt;
 	int username_flash = 0, username_flash_t = 1;
 #ifdef PTW32_STATIC_LIB
     pthread_win32_process_attach_np();
     pthread_win32_thread_attach_np();
 #endif
+	limitFPS = 60;
 	vid_buf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE);
 	part_vbuf = calloc((XRES+BARSIZE)*(YRES+MENUSIZE), PIXELSIZE); //Extra video buffer
 	part_vbuf_store = part_vbuf;
@@ -1633,27 +1630,47 @@ int main(int argc, char *argv[])
 	numCores = core_count();
 #endif
 //TODO: Move out version stuff
-#ifdef BETA
-	if (is_beta)
-	{
-		old_ver_len = textwidth((char*)old_ver_msg_beta);
-	}
-	else
-	{
-		old_ver_len = textwidth((char*)old_ver_msg);
-	}
-#else
-	old_ver_len = textwidth((char*)old_ver_msg);
-#endif
 	menu_count();
 	parts = calloc(sizeof(particle), NPART);
 	cb_parts = calloc(sizeof(particle), NPART);
-	fire_bg=calloc(XRES*YRES, PIXELSIZE);
 	init_can_move();
 	clear_sim();
 
 	//fbi_img = render_packed_rgb(fbi, FBI_W, FBI_H, FBI_CMP);
 
+	for (i=1; i<argc; i++)
+	{
+		if (!strncmp(argv[i], "ddir", 4) && i+1<argc)
+		{
+			chdir(argv[i+1]);
+			i++;
+		}
+		else if (!strncmp(argv[i], "open", 4) && i+1<argc)
+		{
+			int size;
+			void *file_data;
+			file_data = file_load(argv[i+1], &size);
+			if (file_data)
+			{
+				svf_last = file_data;
+				svf_lsize = size;
+				if(!parse_save(file_data, size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap))
+				{
+					it=0;
+					svf_filename[0] = 0;
+					svf_fileopen = 1;
+				} else {
+					svf_last = NULL;
+					svf_lsize = 0;
+					free(file_data);
+					file_data = NULL;
+				}
+			}
+			i++;
+		}
+
+	}
+	
 	load_presets();
 
 	for (i=1; i<argc; i++)
@@ -1696,38 +1713,27 @@ int main(int argc, char *argv[])
 		}
 		else if (!strncmp(argv[i], "open", 4) && i+1<argc)
 		{
-			int size;
-			void *file_data;
-			file_data = file_load(argv[i+1], &size);
-			if (file_data)
-			{
-				svf_last = file_data;
-				svf_lsize = size;
-				if(!parse_save(file_data, size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap))
-				{
-					it=0;
-					svf_filename[0] = 0;
-					svf_fileopen = 1;
-				} else {
-					svf_last = NULL;
-					svf_lsize = 0;
-					free(file_data);
-					file_data = NULL;
-				}
-			}
+			i++;
+		}
+		else if (!strncmp(argv[i], "ddir", 4) && i+1<argc)
+		{
 			i++;
 		}
 
 	}
-
-	save_presets(0);
 
 	make_kernel();
 	prepare_alpha(CELL, 1.0f);
 
 	stamp_init();
 
-	if (!sdl_open()) exit(1);
+	if (!sdl_open())
+	{
+		sdl_scale = 1;
+		kiosk_enable = 0;
+		if (!sdl_open()) exit(1);
+	}
+	save_presets(0);
 	http_init(http_proxy_string[0] ? http_proxy_string : NULL);
 
 	if (cpu_check())
@@ -1738,6 +1744,7 @@ int main(int argc, char *argv[])
 
 	http_ver_check = http_async_req_start(NULL, "http://" SERVER "/Update.api?Action=CheckVersion", NULL, 0, 0);
 	if (svf_login) {
+		http_auth_headers(http_ver_check, svf_user_id, NULL, svf_session_id); //Add authentication so beta checking can be done from user basis
 		http_session_check = http_async_req_start(NULL, "http://" SERVER "/Login.api?Action=CheckSession", NULL, 0, 0);
 		http_auth_headers(http_session_check, svf_user_id, NULL, svf_session_id);
 	}
@@ -1796,12 +1803,20 @@ int main(int argc, char *argv[])
 			bsy = 1180;
 		if (bsy<0)
 			bsy = 0;
+			
+		//Pretty powders, colour cycle
+		//sandcolour_r = 0;
+		//sandcolour_g = 0;
+		sandcolour_b = sandcolour_r = sandcolour_g = (int)(20.0f*sin((float)sandcolour_frame*(M_PI/180.0f)));
+		sandcolour_frame++;
+		sandcolour_frame%=360;
 		
 		if(ngrav_enable && drawgrav_enable)
 			draw_grav(vid_buf);
 		draw_walls(part_vbuf);
 		update_particles(part_vbuf); //update everything
 		draw_parts(part_vbuf); //draw particles
+		draw_other(part_vbuf);
 		if(sl == WL_GRAV+100 || sr == WL_GRAV+100)
 			draw_grav_zones(part_vbuf);
 		
@@ -1811,9 +1826,9 @@ int main(int argc, char *argv[])
 			if(result) //Did the gravity thread finish?
 			{
 				memcpy(th_gravmap, gravmap, sizeof(gravmap)); //Move our current gravmap to be processed other thread
-				memcpy(gravy, th_gravy, sizeof(gravy));	//Hmm, Gravy
-				memcpy(gravx, th_gravx, sizeof(gravx)); //Move the processed velocity maps to be used
-				memcpy(gravp, th_gravp, sizeof(gravp));
+				//memcpy(gravy, th_gravy, sizeof(gravy));	//Hmm, Gravy
+				//memcpy(gravx, th_gravx, sizeof(gravx)); //Move the processed velocity maps to be used
+				//memcpy(gravp, th_gravp, sizeof(gravp));
 
 				if (!sys_pause||framerender){ //Only update if not paused
 					//Switch the full size gravmaps, we don't really need the two above any more
@@ -1885,15 +1900,17 @@ int main(int argc, char *argv[])
 				ver_data = http_async_req_stop(http_ver_check, &http_ret, NULL);
 				if (http_ret==200 && ver_data)
 				{
-#ifdef BETA
-					if (sscanf(ver_data, "%d.%d.%d", &major, &minor, &is_beta)==3)
-						if (major>SAVE_VERSION || (major==SAVE_VERSION && minor>MINOR_VERSION) || (major==SAVE_VERSION && is_beta == 0))
+					if (sscanf(ver_data, "%d.%d.%d.%d", &major, &minor, &is_beta, &buildnum)==4)
+						if (buildnum>BUILD_NUM)
 							old_version = 1;
-#else
-					if (sscanf(ver_data, "%d.%d", &major, &minor)==2)
-						if (major>SAVE_VERSION || (major==SAVE_VERSION && minor>MINOR_VERSION))
-							old_version = 1;
-#endif
+						if (is_beta)
+						{
+							old_ver_len = textwidth((char*)old_ver_msg_beta);
+						}
+						else
+						{
+							old_ver_len = textwidth((char*)old_ver_msg);
+						}
 					free(ver_data);
 				}
 				http_ver_check = NULL;
@@ -1910,6 +1927,7 @@ int main(int argc, char *argv[])
 					if (!strncmp(check_data, "EXPIRED", 7))
 					{
 						//Session expired
+						printf("EXPIRED");
 						strcpy(svf_user, "");
 						strcpy(svf_pass, "");
 						strcpy(svf_user_id, "");
@@ -1923,6 +1941,7 @@ int main(int argc, char *argv[])
 					else if (!strncmp(check_data, "BANNED", 6))
 					{
 						//User banned
+						printf("BANNED");
 						strcpy(svf_user, "");
 						strcpy(svf_pass, "");
 						strcpy(svf_user_id, "");
@@ -2133,7 +2152,7 @@ int main(int argc, char *argv[])
 				CURRENT_BRUSH =(CURRENT_BRUSH + 1)%BRUSH_NUM ;
 			}
 			if (sdl_key==SDLK_LEFTBRACKET) {
-				if (sdl_zoom_trig==1)
+				if (sdl_zoom_trig)
 				{
 					ZSIZE -= 1;
 					if (ZSIZE>60)
@@ -2173,7 +2192,7 @@ int main(int argc, char *argv[])
 				}
 			}
 			if (sdl_key==SDLK_RIGHTBRACKET) {
-				if (sdl_zoom_trig==1)
+				if (sdl_zoom_trig)
 				{
 					ZSIZE += 1;
 					if (ZSIZE>60)
@@ -2243,7 +2262,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
-					hsvSave = decorations_ui(vid_buf,&bsx,&bsy,hsvSave);//decoration_mode = !decoration_mode;
+					rgbSave = decorations_ui(vid_buf,&bsx,&bsy,rgbSave);//decoration_mode = !decoration_mode;
 					decorations_enable = 1;
 					sys_pause=1;
 				}
@@ -2353,6 +2372,8 @@ int main(int argc, char *argv[])
 				aheat_enable = !aheat_enable;
 			if (sdl_key=='h')
 				hud_enable = !hud_enable;
+			if (sdl_key=='n')
+				pretty_powder = !pretty_powder;
 			if (sdl_key=='p')
 				dump_frame(vid_buf, XRES, YRES, XRES+BARSIZE);
 			if (sdl_key=='v'&&(sdl_mod & (KMOD_LCTRL|KMOD_RCTRL)))
@@ -2430,6 +2451,7 @@ int main(int argc, char *argv[])
 
 				for (cbi=0; cbi<NPART; cbi++)
 					parts[cbi] = cb_parts[cbi];
+				parts_lastActiveIndex = NPART-1;
 
 				for (cby = 0; cby<YRES; cby++)
 					for (cbx = 0; cbx<XRES; cbx++)
@@ -2479,7 +2501,7 @@ int main(int argc, char *argv[])
 
 		if (sdl_wheel)
 		{
-			if (sdl_zoom_trig==1)//zoom window change
+			if (sdl_zoom_trig)//zoom window change
 			{
 				ZSIZE += sdl_wheel;
 				if (ZSIZE>60)
@@ -2522,7 +2544,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		bq = b; // bq is previous mouse state
+		bq = bc; // bq is previous mouse state
 		bc = b = SDL_GetMouseState(&x, &y); // b is current mouse state
 
 #ifdef LUACONSOLE
@@ -2541,7 +2563,7 @@ int main(int argc, char *argv[])
 				b = 0;
 			}
 		}
-		luacon_step(x/sdl_scale, y/sdl_scale);
+		luacon_step(x/sdl_scale, y/sdl_scale,sl,sr);
 #endif
 
 		for (i=0; i<SC_TOTAL; i++)//draw all the menu sections
@@ -2582,8 +2604,8 @@ int main(int argc, char *argv[])
 				else if ((cr&0xFF)==PT_LAVA && parts[cr>>8].ctype > 0 && parts[cr>>8].ctype < PT_NUM )
 				{
 					char lowername[6];
-					strcpy(lowername, ptypes[parts[cr>>8].ctype].name);
 					int ix;
+					strcpy(lowername, ptypes[parts[cr>>8].ctype].name);
 					for (ix = 0; lowername[ix]; ix++)
 						lowername[ix] = tolower(lowername[ix]);
 
@@ -2594,8 +2616,7 @@ int main(int argc, char *argv[])
 					int tctype = parts[cr>>8].ctype;
 					if ((cr&0xFF)==PT_PIPE)
 					{
-						if (parts[cr>>8].tmp<PT_NUM) tctype = parts[cr>>8].tmp;
-						else tctype = 0;
+						tctype = parts[cr>>8].tmp&0xFF;
 					}
 					if (tctype>=PT_NUM || tctype<0 || (cr&0xFF)==PT_PHOT)
 						tctype = 0;
@@ -2607,13 +2628,13 @@ int main(int argc, char *argv[])
 				}
 				if (DEBUG_MODE)
 				{
-					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
+					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d, Tmp:%d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life, parts[cr>>8].tmp);
 					sprintf(coordtext, "#%d, X:%d Y:%d", cr>>8, x/sdl_scale, y/sdl_scale);
 				}
 				else
 				{
 #ifdef BETA
-					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life);
+					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C, Life: %d, Tmp:%d", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f, parts[cr>>8].life, parts[cr>>8].tmp);
 #else
 					sprintf(heattext, "%s, Pressure: %3.2f, Temp: %4.2f C", nametext, pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], parts[cr>>8].temp-273.15f);
 #endif
@@ -2625,7 +2646,7 @@ int main(int argc, char *argv[])
 				sprintf(heattext, "Empty, Pressure: %3.2f", pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL]);
 				if (DEBUG_MODE)
 				{
-					sprintf(coordtext, "X:%d Y:%d. GX: %.2f GY: %.2f", x/sdl_scale, y/sdl_scale, gravx[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL], gravy[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL]);
+					sprintf(coordtext, "X:%d Y:%d. GX: %.2f GY: %.2f", x/sdl_scale, y/sdl_scale, gravxf[((y/sdl_scale)*XRES)+(x/sdl_scale)], gravyf[((y/sdl_scale)*XRES)+(x/sdl_scale)]);
 				}
 			}
 		}
@@ -2641,7 +2662,7 @@ int main(int argc, char *argv[])
 		if (update_flag)
 		{
 			info_box(vid_buf, "Finalizing update...");
-			if (last_major>SAVE_VERSION || (last_major==SAVE_VERSION && last_minor>=MINOR_VERSION))
+			if (last_build>BUILD_NUM)
 			{
 				update_cleanup();
 				error_ui(vid_buf, 0, "Update failed - try downloading a new version.");
@@ -2659,18 +2680,25 @@ int main(int argc, char *argv[])
 		if (b && !bq && x>=(XRES-19-old_ver_len)*sdl_scale &&
 		        x<=(XRES-14)*sdl_scale && y>=(YRES-22)*sdl_scale && y<=(YRES-9)*sdl_scale && old_version)
 		{
-			tmp = malloc(64);
+			tmp = malloc(128);
 #ifdef BETA
 			if (is_beta)
 			{
-				sprintf(tmp, "Your version: %d (Beta %d), new version: %d (Beta %d).", SAVE_VERSION, MINOR_VERSION, major, minor);
+				sprintf(tmp, "Your version: %d.%d Beta (%d)\nNew version: %d.%d Beta (%d)", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, major, minor, buildnum);
 			}
 			else
 			{
-				sprintf(tmp, "Your version: %d (Beta %d), new version: %d.%d.", SAVE_VERSION, MINOR_VERSION, major, minor);
+				sprintf(tmp, "Your version: %d.%d Beta (%d)\nNew version: %d.%d (%d)", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, major, minor, buildnum);
 			}
 #else
-			sprintf(tmp, "Your version: %d.%d, new version: %d.%d.", SAVE_VERSION, MINOR_VERSION, major, minor);
+			if (is_beta)
+			{
+				sprintf(tmp, "Your version: %d.%d (%d)\nNew version: %d.%d Beta (%d)", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, major, minor, buildnum);
+			}
+			else
+			{
+				sprintf(tmp, "Your version: %d.%d (%d)\nNew version: %d.%d (%d)", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, major, minor, buildnum);
+			}
 #endif
 			if (confirm_ui(vid_buf, "Do you want to update The Powder Toy?", tmp, "Update"))
 			{
@@ -2845,8 +2873,8 @@ int main(int argc, char *argv[])
 		}
 		else if (save_mode==2)
 		{
-			save_w = mx/sdl_scale - save_x;
-			save_h = my/sdl_scale - save_y;
+			save_w = mx/sdl_scale + 1 - save_x;
+			save_h = my/sdl_scale + 1 - save_y;
 			if (save_w+save_x>XRES) save_w = XRES-save_x;
 			if (save_h+save_y>YRES) save_h = YRES-save_y;
 			if (save_w<1) save_w = 1;
@@ -2891,7 +2919,10 @@ int main(int argc, char *argv[])
 			zoom_wy = 0;
 			zoom_en = 1;
 			if (!b && bq)
+			{
 				zoom_en = 2;
+				sdl_zoom_trig = 0;
+			}
 		}
 		else if (b)//there is a click
 		{
@@ -2987,7 +3018,6 @@ int main(int argc, char *argv[])
 						if (x>=1 && x<=17)
 						{
 							search_ui(vid_buf);
-							memset(fire_bg, 0, XRES*YRES*PIXELSIZE);
 							memset(pers_bg, 0, (XRES+BARSIZE)*YRES*PIXELSIZE);
 							memset(fire_r, 0, sizeof(fire_r));
 							memset(fire_g, 0, sizeof(fire_g));
@@ -3335,7 +3365,7 @@ int main(int argc, char *argv[])
 		if (itc)//message in the middle of the screen, such as view mode changes
 		{
 			itc--;
-			drawtext(vid_buf, (XRES-textwidth(itc_msg))/2, ((YRES/2)-10), itc_msg, 255, 255, 255, itc>51?255:itc*5);
+			drawtext_outline(vid_buf, (XRES-textwidth(itc_msg))/2, ((YRES/2)-10), itc_msg, 255, 255, 255, itc>51?255:itc*5, 0, 0, 0, itc>51?255:itc*5);
 		}
 		if (it)//intro message
 		{
@@ -3346,7 +3376,6 @@ int main(int argc, char *argv[])
 		if (old_version)
 		{
 			clearrect(vid_buf, XRES-21-old_ver_len, YRES-24, old_ver_len+9, 17);
-#ifdef BETA
 			if (is_beta)
 			{
 				drawtext(vid_buf, XRES-16-old_ver_len, YRES-19, old_ver_msg_beta, 255, 216, 32, 255);
@@ -3355,9 +3384,6 @@ int main(int argc, char *argv[])
 			{
 				drawtext(vid_buf, XRES-16-old_ver_len, YRES-19, old_ver_msg, 255, 216, 32, 255);
 			}
-#else
-			drawtext(vid_buf, XRES-16-old_ver_len, YRES-19, old_ver_msg, 255, 216, 32, 255);
-#endif
 			drawrect(vid_buf, XRES-19-old_ver_len, YRES-22, old_ver_len+5, 13, 255, 216, 32, 255);
 		}
 		
@@ -3393,10 +3419,10 @@ int main(int argc, char *argv[])
 		if (hud_enable)
 		{
 #ifdef BETA
-			sprintf(uitext, "Version %d Beta %d FPS:%d Parts:%d Generation:%d Gravity:%d Air:%d", SAVE_VERSION, MINOR_VERSION, FPSB, NUM_PARTS, GENERATION, gravityMode, airMode);
+			sprintf(uitext, "Version %d.%d Beta (%d) FPS:%d Parts:%d Generation:%d Gravity:%d Air:%d", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, FPSB, NUM_PARTS, GENERATION, gravityMode, airMode);
 #else
 			if (DEBUG_MODE)
-				sprintf(uitext, "Version %d.%d FPS:%d Parts:%d Generation:%d Gravity:%d Air:%d", SAVE_VERSION, MINOR_VERSION, FPSB, NUM_PARTS, GENERATION, gravityMode, airMode);
+				sprintf(uitext, "Version %d.%d (%d) FPS:%d Parts:%d Generation:%d Gravity:%d Air:%d", SAVE_VERSION, MINOR_VERSION, BUILD_NUM, FPSB, NUM_PARTS, GENERATION, gravityMode, airMode);
 			else
 				sprintf(uitext, "Version %d.%d FPS:%d", SAVE_VERSION, MINOR_VERSION, FPSB);
 #endif
@@ -3405,7 +3431,7 @@ int main(int argc, char *argv[])
 			if (sdl_mod&(KMOD_CAPS))
 				strappend(uitext, " [CAP LOCKS]");
 			if (GRID_MODE)
-				sprintf(uitext, "%s [GRID: %d]", uitext, GRID_MODE);
+				sprintf(uitext, "%s [GRID: %d]", uitext, GRID_MODE); //TODO: Undefined behavior: variable is used as parameter and destination in sprintf().
 #ifdef INTERNAL
 			if (vs)
 				strappend(uitext, " [FRAME CAPTURE]");
