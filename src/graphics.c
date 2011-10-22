@@ -1519,8 +1519,8 @@ for (y=0; y<YRES/CELL; y++)
 
 void draw_grav(pixel *vid)
 {
-int x, y, i;
-float nx, ny, dist;
+	int x, y, i, ca;
+	float nx, ny, dist;
 
 for (y=0; y<YRES/CELL; y++)
 {
@@ -1533,15 +1533,16 @@ for (y=0; y<YRES/CELL; y++)
 		dist = fabsf(gravx[y][x])+fabsf(gravy[y][x]);
 		for(i = 0; i < 4; i++)
 		{
-			if(fabsf(gravpf[(y*XRES)+x]) <= 0.001f && fabsf(gravyf[((y*CELL)*XRES)+(x*CELL)]) <= 0.001f)
+			ca = ((y*CELL)*XRES)+(x*CELL);
+			if(fabsf(gravpf[ca]) <= 0.001f && fabsf(gravyf[ca]) <= 0.001f)
 				continue;
 			nx = x*CELL;
 			ny = y*CELL;
-			dist = fabsf(gravyf[(y*XRES)+x])+fabsf(gravxf[(y*XRES)+x]);
+			dist = fabsf(gravyf[ca])+fabsf(gravxf[ca]);
 			for(i = 0; i < 4; i++)
 			{
-				nx -= gravxf[((y*CELL)*XRES)+(x*CELL)]*0.5f;
-				ny -= gravyf[((y*CELL)*XRES)+(x*CELL)]*0.5f;
+				nx -= gravxf[ca]*0.5f;
+				ny -= gravyf[ca]*0.5f;
 				addpixel(vid, (int)(nx+0.5f), (int)(ny+0.5f), 255, 255, 255, (int)(dist*20.0f));
 			}
 		}
@@ -5011,6 +5012,59 @@ int sdl_open(void)
 int draw_debug_info(pixel* vid, int lm, int lx, int ly, int cx, int cy, int line_x, int line_y)
 {
 	char infobuf[256];
+	if(debug_flags & DEBUG_PERFORMANCE_FRAME || debug_flags & DEBUG_PERFORMANCE_CALC)
+	{
+		int t1, t2, x = 0, i = debug_perf_istart;
+		float partiavg = 0, frameavg = 0;
+		while(i != debug_perf_iend)
+		{
+			partiavg += abs(debug_perf_partitime[i]/100000);
+			frameavg += abs(debug_perf_frametime[i]/100000);
+			if(debug_flags & DEBUG_PERFORMANCE_CALC)
+				t1 = abs(debug_perf_partitime[i]/100000);
+			else
+				t1 = 0;
+				
+			if(debug_flags & DEBUG_PERFORMANCE_FRAME)
+				t2 = abs(debug_perf_frametime[i]/100000);
+			else
+				t2 = 0;
+				
+			if(t1 > YRES)
+				t1 = YRES;
+			if(t1+t2 > YRES)
+				t2 = YRES-t1;
+				
+			if(t1>0)
+				draw_line(vid, x, YRES, x, YRES-t1, 0, 255, 120, XRES+BARSIZE);
+			if(t2>0)	
+				draw_line(vid, x, YRES-t1, x, YRES-(t1+t2), 255, 120, 0, XRES+BARSIZE);
+				
+			i++;
+			x++;
+			i %= DEBUG_PERF_FRAMECOUNT;
+		}
+		
+		if(debug_flags & DEBUG_PERFORMANCE_CALC)
+			t1 = abs(partiavg / x);
+		else
+			t1 = 0;
+			
+		if(debug_flags & DEBUG_PERFORMANCE_FRAME)
+			t2 = abs(frameavg / x);
+		else
+			t2 = 0;
+		
+		if(t1 > YRES)
+			t1 = YRES;
+		if(t1+t2 > YRES)
+			t2 = YRES-t1;
+		
+		if(t1>0)
+			fillrect(vid, x, YRES-t1-1, 5, t1+2, 0, 255, 0, 255);
+		if(t2>0)	
+			fillrect(vid, x, (YRES-t1)-t2-1, 5, t2+1, 255, 0, 0, 255);
+	}
 	if(debug_flags & DEBUG_DRAWTOOL)
 	{
 		if(lm == 1) //Line tool
