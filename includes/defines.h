@@ -9,8 +9,8 @@
  
 //VersionInfoStart
 #define SAVE_VERSION 65
-#define MINOR_VERSION 4
-#define BUILD_NUM 97
+#define MINOR_VERSION 5
+#define BUILD_NUM 99
 //VersionInfoEnd
 
 #define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
@@ -166,6 +166,7 @@ extern int pretty_powder;
 extern int drawgrav_enable;
 int limitFPS;
 int water_equal_test;
+extern int quickoptions_tooltip_fade;
 
 extern int debug_flags;
 #define DEBUG_PERF_FRAMECOUNT 256
