@@ -833,13 +833,13 @@ inline int drawchar(pixel *vid, int x, int y, int c, int r, int g, int b, int a)
 			if (!bn)
 			{
 				ba = *(rp++);
-			bn = 8;
+				bn = 8;
+			}
+			drawpixel(vid, x+i, y+j, r, g, b, ((ba&3)*a)/3);
+			ba >>= 2;
+			bn -= 2;
 		}
-		drawpixel(vid, x+i, y+j, r, g, b, ((ba&3)*a)/3);
-		ba >>= 2;
-		bn -= 2;
-	}
-return x + w;
+	return x + w;
 }
 
 int drawtext(pixel *vid, int x, int y, const char *s, int r, int g, int b, int a)
@@ -850,7 +850,6 @@ int drawtext(pixel *vid, int x, int y, const char *s, int r, int g, int b, int a
 		if (*s == '\n')
 		{
 			x = sx;
-			rw = 0;
 			y += FONT_H+2;
 		}
 		else if (*s == '\b')
@@ -879,6 +878,11 @@ int drawtext(pixel *vid, int x, int y, const char *s, int r, int g, int b, int a
 			case 'b':
 				r = g = 0;
 				b = 255;
+				break;
+			case 't':
+				b = 255;
+				g = 170;
+				r = 32;
 				break;
 			}
 			s++;
@@ -914,8 +918,14 @@ int drawtextwrap(pixel *vid, int x, int y, int w, const char *s, int r, int g, i
 		charspace = textwidthx((char *)s, w-(x-cw));
 		if (charspace<wordlen && wordlen && w-(x-cw)<w/3)
 		{
-
-			if (x-cw>=w)
+			x = sx;
+			rw = 0;
+			y+=FONT_H+2;
+			rh+=FONT_H+2;
+		}
+		for (; *s && --wordlen>=-1; s++)
+		{
+			if (*s == '\n')
 			{
 				x = sx;
 				rw = 0;
@@ -968,10 +978,8 @@ int drawtextwrap(pixel *vid, int x, int y, int w, const char *s, int r, int g, i
 				}
 				x = drawchar(vid, x, y, *(unsigned char *)s, r, g, b, a);
 			}
-			x = drawchar(vid, x, y, *(unsigned char *)s, r, g, b, a);
 		}
 	}
-}
 
 	return rh;
 }
@@ -1021,150 +1029,150 @@ void drawdots(pixel *vid, int x, int y, int h, int r, int g, int b, int a)
 
 int textwidth(char *s)
 {
-int x = 0;
-for (; *s; s++)
-	x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-return x-1;
+	int x = 0;
+	for (; *s; s++)
+		x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+	return x-1;
 }
 
 int drawtextmax(pixel *vid, int x, int y, int w, char *s, int r, int g, int b, int a)
 {
-int i;
-w += x-5;
-for (; *s; s++)
-{
-	if (x+font_data[font_ptrs[(int)(*(unsigned char *)s)]]>=w && x+textwidth(s)>=w+5)
-		break;
-	x = drawchar(vid, x, y, *(unsigned char *)s, r, g, b, a);
-}
-if (*s)
-	for (i=0; i<3; i++)
-		x = drawchar(vid, x, y, '.', r, g, b, a);
-return x;
+	int i;
+	w += x-5;
+	for (; *s; s++)
+	{
+		if (x+font_data[font_ptrs[(int)(*(unsigned char *)s)]]>=w && x+textwidth(s)>=w+5)
+			break;
+		x = drawchar(vid, x, y, *(unsigned char *)s, r, g, b, a);
+	}
+	if (*s)
+		for (i=0; i<3; i++)
+			x = drawchar(vid, x, y, '.', r, g, b, a);
+	return x;
 }
 
 int textnwidth(char *s, int n)
 {
-int x = 0;
-for (; *s; s++)
-{
-	if (!n)
-		break;
-	x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-	n--;
-}
-return x-1;
+	int x = 0;
+	for (; *s; s++)
+	{
+		if (!n)
+			break;
+		x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+		n--;
+	}
+	return x-1;
 }
 void textnpos(char *s, int n, int w, int *cx, int *cy)
 {
-int x = 0;
-int y = 0;
-int wordlen, charspace;
-while (*s&&n)
-{
-	wordlen = strcspn(s," .,!?\n");
-	charspace = textwidthx(s, w-x);
-	if (charspace<wordlen && wordlen && w-x<w/3)
+	int x = 0;
+	int y = 0;
+	int wordlen, charspace;
+	while (*s&&n)
 	{
-		x = 0;
-		y += FONT_H+2;
-	}
-	for (; *s && --wordlen>=-1; s++)
-	{
-		if (!n) {
-			break;
-		}
-		x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-		if (x>=w)
+		wordlen = strcspn(s," .,!?\n");
+		charspace = textwidthx(s, w-x);
+		if (charspace<wordlen && wordlen && w-x<w/3)
 		{
 			x = 0;
 			y += FONT_H+2;
 		}
-		n--;
+		for (; *s && --wordlen>=-1; s++)
+		{
+			if (!n) {
+				break;
+			}
+			x += font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+			if (x>=w)
+			{
+				x = 0;
+				y += FONT_H+2;
+			}
+			n--;
+		}
 	}
-}
-*cx = x-1;
-*cy = y;
+	*cx = x-1;
+	*cy = y;
 }
 
 int textwidthx(char *s, int w)
 {
-int x=0,n=0,cw;
-for (; *s; s++)
-{
-	cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-	if (x+(cw/2) >= w)
-		break;
-	x += cw;
-	n++;
-}
-return n;
+	int x=0,n=0,cw;
+	for (; *s; s++)
+	{
+		cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+		if (x+(cw/2) >= w)
+			break;
+		x += cw;
+		n++;
+	}
+	return n;
 }
 int textposxy(char *s, int width, int w, int h)
 {
-int x=0,y=0,n=0,cw, wordlen, charspace;
-while (*s)
-{
-	wordlen = strcspn(s," .,!?\n");
-	charspace = textwidthx(s, width-x);
-	if (charspace<wordlen && wordlen && width-x<width/3)
+	int x=0,y=0,n=0,cw, wordlen, charspace;
+	while (*s)
 	{
-		x = 0;
-		y += FONT_H+2;
-	}
-	for (; *s && --wordlen>=-1; s++)
-	{
-		cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-		if ((x+(cw/2) >= w && y+6 >= h)||(y+6 >= h+FONT_H+2))
-			return n++;
-		x += cw;
-		if (x>=width) {
+		wordlen = strcspn(s," .,!?\n");
+		charspace = textwidthx(s, width-x);
+		if (charspace<wordlen && wordlen && width-x<width/3)
+		{
 			x = 0;
 			y += FONT_H+2;
 		}
-		n++;
+		for (; *s && --wordlen>=-1; s++)
+		{
+			cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+			if ((x+(cw/2) >= w && y+6 >= h)||(y+6 >= h+FONT_H+2))
+				return n++;
+			x += cw;
+			if (x>=width) {
+				x = 0;
+				y += FONT_H+2;
+			}
+			n++;
+		}
 	}
-}
-return n;
+	return n;
 }
 int textwrapheight(char *s, int width)
 {
-int x=0, height=FONT_H+2, cw;
-int wordlen;
-int charspace;
-while (*s)
-{
-	wordlen = strcspn(s," .,!?\n");
-	charspace = textwidthx(s, width-x);
-	if (charspace<wordlen && wordlen && width-x<width/3)
+	int x=0, height=FONT_H+2, cw;
+	int wordlen;
+	int charspace;
+	while (*s)
 	{
-		x = 0;
-		height += FONT_H+2;
-	}
-	for (; *s && --wordlen>=-1; s++)
-	{
-		if (*s == '\n')
+		wordlen = strcspn(s," .,!?\n");
+		charspace = textwidthx(s, width-x);
+		if (charspace<wordlen && wordlen && width-x<width/3)
 		{
 			x = 0;
 			height += FONT_H+2;
 		}
-		else if (*s == '\b')
+		for (; *s && --wordlen>=-1; s++)
 		{
-			s++;
-		}
-		else
-		{
-			cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
-			if (x+cw>=width)
+			if (*s == '\n')
 			{
 				x = 0;
 				height += FONT_H+2;
 			}
-			x += cw;
+			else if (*s == '\b')
+			{
+				s++;
+			}
+			else
+			{
+				cw = font_data[font_ptrs[(int)(*(unsigned char *)s)]];
+				if (x+cw>=width)
+				{
+					x = 0;
+					height += FONT_H+2;
+				}
+				x += cw;
+			}
 		}
 	}
-}
-return height;
+	return height;
 }
 
 //the most used function for drawing a pixel, because it has OpenGL support, which is not fully implemented.
@@ -1204,19 +1212,19 @@ inline void blendpixel(pixel *vid, int x, int y, int r, int g, int b, int a)
 
 void draw_icon(pixel *vid_buf, int x, int y, char ch, int flag)
 {
-char t[2];
-t[0] = ch;
-t[1] = 0;
-if (flag)
-{
-	fillrect(vid_buf, x-1, y-1, 17, 17, 255, 255, 255, 255);
-	drawtext(vid_buf, x+3, y+2, t, 0, 0, 0, 255);
-}
-else
-{
-	drawrect(vid_buf, x, y, 15, 15, 255, 255, 255, 255);
-	drawtext(vid_buf, x+3, y+2, t, 255, 255, 255, 255);
-}
+	char t[2];
+	t[0] = ch;
+	t[1] = 0;
+	if (flag)
+	{
+		fillrect(vid_buf, x-1, y-1, 17, 17, 255, 255, 255, 255);
+		drawtext(vid_buf, x+3, y+2, t, 0, 0, 0, 255);
+	}
+	else
+	{
+		drawrect(vid_buf, x, y, 15, 15, 255, 255, 255, 255);
+		drawtext(vid_buf, x+3, y+2, t, 255, 255, 255, 255);
+	}
 }
 void draw_air(pixel *vid)
 {
@@ -1228,57 +1236,63 @@ void draw_air(pixel *vid)
 	for (y=0; y<YRES/CELL; y++)
 		for (x=0; x<XRES/CELL; x++)
 		{
-			if (pv[y][x] > 0.0f)
-				c  = PIXRGB(clamp_flt(pv[y][x], 0.0f, 8.0f), 0, 0);//positive pressure is red!
-			else
-				c  = PIXRGB(0, 0, clamp_flt(-pv[y][x], 0.0f, 8.0f));//negative pressure is blue!
-		}
-		else if (cmode == CM_VEL)
-		{
-			c  = PIXRGB(clamp_flt(fabsf(vx[y][x]), 0.0f, 8.0f),//vx adds red
-				clamp_flt(pv[y][x], 0.0f, 8.0f),//pressure adds green
-				clamp_flt(fabsf(vy[y][x]), 0.0f, 8.0f));//vy adds blue
-		}
-		else if (cmode == CM_HEAT && aheat_enable)
-		{
-			float ttemp = hv[y][x]+(-MIN_TEMP);
-			int caddress = restrict_flt((int)( restrict_flt(ttemp, 0.0f, MAX_TEMP+(-MIN_TEMP)) / ((MAX_TEMP+(-MIN_TEMP))/1024) ) *3, 0.0f, (1024.0f*3)-3);
-			c = PIXRGB((int)((unsigned char)color_data[caddress]*0.7f), (int)((unsigned char)color_data[caddress+1]*0.7f), (int)((unsigned char)color_data[caddress+2]*0.7f));
-			//c  = PIXRGB(clamp_flt(fabsf(vx[y][x]), 0.0f, 8.0f),//vx adds red
-			//	clamp_flt(hv[y][x], 0.0f, 1600.0f),//heat adds green
-			//	clamp_flt(fabsf(vy[y][x]), 0.0f, 8.0f));//vy adds blue
-		}
-		else if (cmode == CM_CRACK)
-		{
-			int r;
-			int g;
-			int b;
-			// velocity adds grey
-			r = clamp_flt(fabsf(vx[y][x]), 0.0f, 24.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 20.0f);
-			g = clamp_flt(fabsf(vx[y][x]), 0.0f, 20.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 24.0f);
-			b = clamp_flt(fabsf(vx[y][x]), 0.0f, 24.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 20.0f);
-			if (pv[y][x] > 0.0f)
+			if (cmode == CM_PRESS)
 			{
-				r += clamp_flt(pv[y][x], 0.0f, 16.0f);//pressure adds red!
-				if (r>255)
-					r=255;
-				if (g>255)
-					g=255;
-				if (b>255)
-					b=255;
-				c  = PIXRGB(r, g, b);
+				if (pv[y][x] > 0.0f)
+					c  = PIXRGB(clamp_flt(pv[y][x], 0.0f, 8.0f), 0, 0);//positive pressure is red!
+				else
+					c  = PIXRGB(0, 0, clamp_flt(-pv[y][x], 0.0f, 8.0f));//negative pressure is blue!
 			}
-			else
+			else if (cmode == CM_VEL)
 			{
-				b += clamp_flt(-pv[y][x], 0.0f, 16.0f);//pressure adds blue!
-				if (r>255)
-					r=255;
-				if (g>255)
-					g=255;
-				if (b>255)
-					b=255;
-				c  = PIXRGB(r, g, b);
+				c  = PIXRGB(clamp_flt(fabsf(vx[y][x]), 0.0f, 8.0f),//vx adds red
+					clamp_flt(pv[y][x], 0.0f, 8.0f),//pressure adds green
+					clamp_flt(fabsf(vy[y][x]), 0.0f, 8.0f));//vy adds blue
 			}
+			else if (cmode == CM_HEAT && aheat_enable)
+			{
+				float ttemp = hv[y][x]+(-MIN_TEMP);
+				int caddress = restrict_flt((int)( restrict_flt(ttemp, 0.0f, MAX_TEMP+(-MIN_TEMP)) / ((MAX_TEMP+(-MIN_TEMP))/1024) ) *3, 0.0f, (1024.0f*3)-3);
+				c = PIXRGB((int)((unsigned char)color_data[caddress]*0.7f), (int)((unsigned char)color_data[caddress+1]*0.7f), (int)((unsigned char)color_data[caddress+2]*0.7f));
+				//c  = PIXRGB(clamp_flt(fabsf(vx[y][x]), 0.0f, 8.0f),//vx adds red
+				//	clamp_flt(hv[y][x], 0.0f, 1600.0f),//heat adds green
+				//	clamp_flt(fabsf(vy[y][x]), 0.0f, 8.0f));//vy adds blue
+			}
+			else if (cmode == CM_CRACK)
+			{
+				int r;
+				int g;
+				int b;
+				// velocity adds grey
+				r = clamp_flt(fabsf(vx[y][x]), 0.0f, 24.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 20.0f);
+				g = clamp_flt(fabsf(vx[y][x]), 0.0f, 20.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 24.0f);
+				b = clamp_flt(fabsf(vx[y][x]), 0.0f, 24.0f) + clamp_flt(fabsf(vy[y][x]), 0.0f, 20.0f);
+				if (pv[y][x] > 0.0f)
+				{
+					r += clamp_flt(pv[y][x], 0.0f, 16.0f);//pressure adds red!
+					if (r>255)
+						r=255;
+					if (g>255)
+						g=255;
+					if (b>255)
+						b=255;
+					c  = PIXRGB(r, g, b);
+				}
+				else
+				{
+					b += clamp_flt(-pv[y][x], 0.0f, 16.0f);//pressure adds blue!
+					if (r>255)
+						r=255;
+					if (g>255)
+						g=255;
+					if (b>255)
+						b=255;
+					c  = PIXRGB(r, g, b);
+				}
+			}
+			for (j=0; j<CELL; j++)//draws the colors
+				for (i=0; i<CELL; i++)
+					vid[(x*CELL+i) + (y*CELL+j)*(XRES+BARSIZE)] = c;
 		}
 #else
     glEnable( GL_TEXTURE_2D );
@@ -1321,22 +1335,22 @@ void draw_air(pixel *vid)
 
 void draw_grav_zones(pixel * vid)
 {
-int x, y, i, j;
-for (y=0; y<YRES/CELL; y++)
-{
-	for (x=0; x<XRES/CELL; x++)
+	int x, y, i, j;
+	for (y=0; y<YRES/CELL; y++)
 	{
-		if(gravmask[y][x])
+		for (x=0; x<XRES/CELL; x++)
 		{
-			for (j=0; j<CELL; j++)//draws the colors
-				for (i=0; i<CELL; i++)
-					if(i == j)
-						drawpixel(vid, x*CELL+i, y*CELL+j, 255, 200, 0, 120);
-					else 
-						drawpixel(vid, x*CELL+i, y*CELL+j, 32, 32, 32, 120);
+			if(gravmask[y][x])
+			{
+				for (j=0; j<CELL; j++)//draws the colors
+					for (i=0; i<CELL; i++)
+						if(i == j)
+							drawpixel(vid, x*CELL+i, y*CELL+j, 255, 200, 0, 120);
+						else 
+							drawpixel(vid, x*CELL+i, y*CELL+j, 32, 32, 32, 120);
+			}
 		}
 	}
-}
 }
 
 void draw_grav(pixel *vid)
@@ -1344,16 +1358,9 @@ void draw_grav(pixel *vid)
 	int x, y, i, ca;
 	float nx, ny, dist;
 
-for (y=0; y<YRES/CELL; y++)
-{
-	for (x=0; x<XRES/CELL; x++)
+	for (y=0; y<YRES/CELL; y++)
 	{
-		if(fabsf(gravx[y][x]) <= 0.001f && fabsf(gravy[y][x]) <= 0.001f)
-			continue;
-		nx = x*CELL;
-		ny = y*CELL;
-		dist = fabsf(gravx[y][x])+fabsf(gravy[y][x]);
-		for(i = 0; i < 4; i++)
+		for (x=0; x<XRES/CELL; x++)
 		{
 			ca = ((y*CELL)*XRES)+(x*CELL);
 			if(fabsf(gravpf[ca]) <= 0.001f && fabsf(gravyf[ca]) <= 0.001f)
@@ -1370,190 +1377,189 @@ for (y=0; y<YRES/CELL; y++)
 		}
 	}
 }
-}
 
 void draw_line(pixel *vid, int x1, int y1, int x2, int y2, int r, int g, int b, int a)  //Draws a line
 {
-int dx, dy, i, sx, sy, check, e, x, y;
+	int dx, dy, i, sx, sy, check, e, x, y;
 
-dx = abs(x1-x2);
-dy = abs(y1-y2);
-sx = isign(x2-x1);
-sy = isign(y2-y1);
-x = x1;
-y = y1;
-check = 0;
+	dx = abs(x1-x2);
+	dy = abs(y1-y2);
+	sx = isign(x2-x1);
+	sy = isign(y2-y1);
+	x = x1;
+	y = y1;
+	check = 0;
 
-if (dy>dx)
-{
-	dx = dx+dy;
-	dy = dx-dy;
-	dx = dx-dy;
-	check = 1;
-}
-
-e = (dy<<2)-dx;
-for (i=0; i<=dx; i++)
-{
-	if (x>=0 && y>=0 && x<a && y<YRES+MENUSIZE)
-		vid[x+y*a] =PIXRGB(r, g, b);
-	if (e>=0)
+	if (dy>dx)
 	{
-		if (check==1)
-			x = x+sx;
-		else
-			y = y+sy;
-		e = e-(dx<<2);
+		dx = dx+dy;
+		dy = dx-dy;
+		dx = dx-dy;
+		check = 1;
 	}
-	if (check==1)
-		y = y+sy;
-	else
-		x = x+sx;
-	e = e+(dy<<2);
-}
+
+	e = (dy<<2)-dx;
+	for (i=0; i<=dx; i++)
+	{
+		if (x>=0 && y>=0 && x<a && y<YRES+MENUSIZE)
+			vid[x+y*a] =PIXRGB(r, g, b);
+		if (e>=0)
+		{
+			if (check==1)
+				x = x+sx;
+			else
+				y = y+sy;
+			e = e-(dx<<2);
+		}
+		if (check==1)
+			y = y+sy;
+		else
+			x = x+sx;
+		e = e+(dy<<2);
+	}
 }
 
 //adds color to a pixel, does not overwrite.
 void addpixel(pixel *vid, int x, int y, int r, int g, int b, int a)
 {
-pixel t;
-if (x<0 || y<0 || x>=XRES || y>=YRES)
-	return;
-t = vid[y*(XRES+BARSIZE)+x];
-r = (a*r + 255*PIXR(t)) >> 8;
-g = (a*g + 255*PIXG(t)) >> 8;
-b = (a*b + 255*PIXB(t)) >> 8;
-if (r>255)
-	r = 255;
-if (g>255)
-	g = 255;
-if (b>255)
-	b = 255;
-vid[y*(XRES+BARSIZE)+x] = PIXRGB(r,g,b);
+	pixel t;
+	if (x<0 || y<0 || x>=XRES || y>=YRES)
+		return;
+	t = vid[y*(XRES+BARSIZE)+x];
+	r = (a*r + 255*PIXR(t)) >> 8;
+	g = (a*g + 255*PIXG(t)) >> 8;
+	b = (a*b + 255*PIXB(t)) >> 8;
+	if (r>255)
+		r = 255;
+	if (g>255)
+		g = 255;
+	if (b>255)
+		b = 255;
+	vid[y*(XRES+BARSIZE)+x] = PIXRGB(r,g,b);
 }
 
 //draws one of two colors, so that it is always clearly visible
 void xor_pixel(int x, int y, pixel *vid)
 {
-int c;
-if (x<0 || y<0 || x>=XRES || y>=YRES)
-	return;
-c = vid[y*(XRES+BARSIZE)+x];
-c = PIXB(c) + 3*PIXG(c) + 2*PIXR(c);
-if (c<512)
-	vid[y*(XRES+BARSIZE)+x] = PIXPACK(0xC0C0C0);
-else
-	vid[y*(XRES+BARSIZE)+x] = PIXPACK(0x404040);
+	int c;
+	if (x<0 || y<0 || x>=XRES || y>=YRES)
+		return;
+	c = vid[y*(XRES+BARSIZE)+x];
+	c = PIXB(c) + 3*PIXG(c) + 2*PIXR(c);
+	if (c<512)
+		vid[y*(XRES+BARSIZE)+x] = PIXPACK(0xC0C0C0);
+	else
+		vid[y*(XRES+BARSIZE)+x] = PIXPACK(0x404040);
 }
 
 //same as xor_pixel, but draws a line of it
 void xor_line(int x1, int y1, int x2, int y2, pixel *vid)
 {
-int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
-float e, de;
-if (cp)
-{
-	y = x1;
-	x1 = y1;
-	y1 = y;
-	y = x2;
-	x2 = y2;
-	y2 = y;
-}
-if (x1 > x2)
-{
-	y = x1;
-	x1 = x2;
-	x2 = y;
-	y = y1;
-	y1 = y2;
-	y2 = y;
-}
-dx = x2 - x1;
-dy = abs(y2 - y1);
-e = 0.0f;
-if (dx)
-	de = dy/(float)dx;
-else
-	de = 0.0f;
-y = y1;
-sy = (y1<y2) ? 1 : -1;
-for (x=x1; x<=x2; x++)
-{
+	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
+	float e, de;
 	if (cp)
-		xor_pixel(y, x, vid);
-	else
-		xor_pixel(x, y, vid);
-	e += de;
-	if (e >= 0.5f)
 	{
-		y += sy;
-		e -= 1.0f;
+		y = x1;
+		x1 = y1;
+		y1 = y;
+		y = x2;
+		x2 = y2;
+		y2 = y;
 	}
-}
+	if (x1 > x2)
+	{
+		y = x1;
+		x1 = x2;
+		x2 = y;
+		y = y1;
+		y1 = y2;
+		y2 = y;
+	}
+	dx = x2 - x1;
+	dy = abs(y2 - y1);
+	e = 0.0f;
+	if (dx)
+		de = dy/(float)dx;
+	else
+		de = 0.0f;
+	y = y1;
+	sy = (y1<y2) ? 1 : -1;
+	for (x=x1; x<=x2; x++)
+	{
+		if (cp)
+			xor_pixel(y, x, vid);
+		else
+			xor_pixel(x, y, vid);
+		e += de;
+		if (e >= 0.5f)
+		{
+			y += sy;
+			e -= 1.0f;
+		}
+	}
 }
 
 //same as blend_pixel, but draws a line of it
 void blend_line(pixel *vid, int x1, int y1, int x2, int y2, int r, int g, int b, int a)
 {
-int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
-float e, de;
-if (cp)
-{
-	y = x1;
-	x1 = y1;
-	y1 = y;
-	y = x2;
-	x2 = y2;
-	y2 = y;
-}
-if (x1 > x2)
-{
-	y = x1;
-	x1 = x2;
-	x2 = y;
-	y = y1;
-	y1 = y2;
-	y2 = y;
-}
-dx = x2 - x1;
-dy = abs(y2 - y1);
-e = 0.0f;
-if (dx)
-	de = dy/(float)dx;
-else
-	de = 0.0f;
-y = y1;
-sy = (y1<y2) ? 1 : -1;
-for (x=x1; x<=x2; x++)
-{
+	int cp=abs(y2-y1)>abs(x2-x1), x, y, dx, dy, sy;
+	float e, de;
 	if (cp)
-		blendpixel(vid, y, x, r, g, b, a);
-	else
-		blendpixel(vid, x, y, r, g, b, a);
-	e += de;
-	if (e >= 0.5f)
 	{
-		y += sy;
-		e -= 1.0f;
+		y = x1;
+		x1 = y1;
+		y1 = y;
+		y = x2;
+		x2 = y2;
+		y2 = y;
 	}
-}
+	if (x1 > x2)
+	{
+		y = x1;
+		x1 = x2;
+		x2 = y;
+		y = y1;
+		y1 = y2;
+		y2 = y;
+	}
+	dx = x2 - x1;
+	dy = abs(y2 - y1);
+	e = 0.0f;
+	if (dx)
+		de = dy/(float)dx;
+	else
+		de = 0.0f;
+	y = y1;
+	sy = (y1<y2) ? 1 : -1;
+	for (x=x1; x<=x2; x++)
+	{
+		if (cp)
+			blendpixel(vid, y, x, r, g, b, a);
+		else
+			blendpixel(vid, x, y, r, g, b, a);
+		e += de;
+		if (e >= 0.5f)
+		{
+			y += sy;
+			e -= 1.0f;
+		}
+	}
 }
 
 //same as xor_pixel, but draws a rectangle
 void xor_rect(pixel *vid, int x, int y, int w, int h)
 {
-int i;
-for (i=0; i<w; i+=2)
-{
-	xor_pixel(x+i, y, vid);
-	xor_pixel(x+i, y+h-1, vid);
-}
-for (i=2; i<h; i+=2)
-{
-	xor_pixel(x, y+i, vid);
-	xor_pixel(x+w-1, y+i, vid);
-}
+	int i;
+	for (i=0; i<w; i+=2)
+	{
+		xor_pixel(x+i, y, vid);
+		xor_pixel(x+i, y+h-1, vid);
+	}
+	for (i=2; i<h; i+=2)
+	{
+		xor_pixel(x, y+i, vid);
+		xor_pixel(x+w-1, y+i, vid);
+	}
 }
 
 void draw_other(pixel *vid) // EMP effect
