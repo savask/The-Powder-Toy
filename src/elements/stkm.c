@@ -13,6 +13,22 @@ int update_STKM(UPDATE_FUNC_ARGS)
 	return 0;
 }
 
+int graphics_STKM(GRAPHICS_FUNC_ARGS)
+{	
+	*pixel_mode = PSPEC_STICKMAN;
+	if ((int)player.elem<PT_NUM)
+	{
+		*colr = PIXR(ptypes[player.elem].pcolors);
+		*colg = PIXG(ptypes[player.elem].pcolors);
+		*colb = PIXB(ptypes[player.elem].pcolors);
+	}
+	else
+	{
+		*colr = *colg = *colb = 255;
+	}
+	return 1;
+}
+
 int run_stickman(playerst* playerp, UPDATE_FUNC_ARGS) {
 	int r, rx, ry;
 	float pp, d;

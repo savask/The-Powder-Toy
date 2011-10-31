@@ -23,8 +23,17 @@ int update_PYRO(UPDATE_FUNC_ARGS) {
 			parts[i].life = rand()%20+250;
 		}
 	}
-	for (rx=-1; rx<2; rx++)
-		for (ry=-1; ry<2; ry++)
+	if(t==PT_PLSM && parts[i].life <=1)
+	{
+		if (parts[i].tmp==3){
+			t = PT_DSTW;
+			part_change_type(i,x,y,t);
+			parts[i].life = 0;
+			parts[i].ctype = PT_FIRE;
+		}
+	}
+	for (rx=-2; rx<3; rx++)
+		for (ry=-2; ry<3; ry++)
 			if (x+rx>=0 && y+ry>0 && x+rx<XRES && y+ry<YRES && (rx || ry))
 			{
 				r = pmap[y+ry][x+rx];
