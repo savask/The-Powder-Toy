@@ -33,7 +33,8 @@ SDL_Surface *sdl_scrn;
 int sdl_scale = 1;
 
 #ifdef OGLR
-GLuint airProg, zoomTex, vidBuf, airBuf, fireAlpha, glowAlpha, blurAlpha, fireProg, partsFboTex, partsFbo, lensProg, partsTFX, partsTFY, airPV, airVY, airVX;
+GLuint zoomTex, vidBuf, airBuf, fireAlpha, glowAlpha, blurAlpha, partsFboTex, partsFbo, partsTFX, partsTFY, airPV, airVY, airVX;
+GLuint fireProg, airProg_Pressure, airProg_Velocity, airProg_Cracker, lensProg;
 #endif
 
 int emp_decor = 0;
@@ -1300,11 +1301,29 @@ void draw_air(pixel *vid)
 					vid[(x*CELL+i) + (y*CELL+j)*(XRES+BARSIZE)] = c;
 		}
 #else
+	GLuint airProg;
+	if(cmode == CM_CRACK)
+	{
+		airProg = airProg_Cracker;
+	}
+	else if(cmode == CM_VEL)
+	{
+		airProg = airProg_Velocity;
+	}
+	else if(cmode == CM_PRESS)
+	{
+		airProg = airProg_Pressure;
+	}
+	else
+	{
+		return;
+	}
+
     glEnable( GL_TEXTURE_2D );
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
     
-    glUseProgram(airProg);
-    
+	glUseProgram(airProg);
+	
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, airVX);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES/CELL, YRES/CELL, GL_RED, GL_FLOAT, vx);
@@ -1321,13 +1340,13 @@ void draw_air(pixel *vid)
     
     glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	glBegin(GL_QUADS);
-    glTexCoord2d(1, 0);
-    glVertex3f(XRES*sdl_scale, YRES*sdl_scale, 1.0);
-    glTexCoord2d(0, 0);
-    glVertex3f(0, YRES*sdl_scale, 1.0);
-    glTexCoord2d(0, 1);
-    glVertex3f(0, 0, 1.0);
     glTexCoord2d(1, 1);
+    glVertex3f(XRES*sdl_scale, YRES*sdl_scale, 1.0);
+    glTexCoord2d(0, 1);
+    glVertex3f(0, YRES*sdl_scale, 1.0);
+    glTexCoord2d(0, 0);
+    glVertex3f(0, 0, 1.0);
+    glTexCoord2d(1, 0);
     glVertex3f(XRES*sdl_scale, 0, 1.0);
     glEnd();
     
@@ -1827,7 +1846,10 @@ void render_parts(pixel *vid)
 				//Pixel rendering
 				if(pixel_mode & PSPEC_STICKMAN)
 				{
-					//Special case for stickman
+					char buff[20];  //Buffer for HP
+					int s;
+					int legr, legg, legb;
+					pixel pc;
 					playerst *cplayer;
 					if(t==PT_STKM)
 						cplayer = &player;
@@ -1873,10 +1895,6 @@ void render_parts(pixel *vid)
 					glEnd();
 					glDisable(GL_LINE_SMOOTH);
 #else
-					char buff[20];  //Buffer for HP
-					int s;
-					int legr, legg, legb;
-					pixel pc;
 
 					if (mousex>(nx-3) && mousex<(nx+3) && mousey<(ny+3) && mousey>(ny-3)) //If mous is in the head
 					{
@@ -2493,53 +2511,60 @@ void render_parts(pixel *vid)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         
         //Drawing the FBO onto the screen sounds like a cool idea now
-		glEnable( GL_TEXTURE_2D );
-		if(cmode==CM_FANCY)
-		{
-			glUseProgram(lensProg);
-			glActiveTexture(GL_TEXTURE0);			
-			glBindTexture(GL_TEXTURE_2D, partsFboTex);
-			glUniform1i(glGetUniformLocation(lensProg, "pTex"), 0);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, partsTFX);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES, YRES, GL_RED, GL_FLOAT, gravxf);
-			glUniform1i(glGetUniformLocation(lensProg, "tfX"), 1);
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, partsTFY);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES, YRES, GL_GREEN, GL_FLOAT, gravyf);
-			glUniform1i(glGetUniformLocation(lensProg, "tfY"), 2);
-			glActiveTexture(GL_TEXTURE0);
-			//glUniform1f(glGetUniformLocation(lensProg, "xres"), (float)XRES);
-			//glUniform1f(glGetUniformLocation(lensProg, "yres"), (float)YRES);
-		}
-		else
-		{	
-			glBindTexture(GL_TEXTURE_2D, partsFboTex);
-			glBlendFunc(GL_ONE, GL_ONE);
-		}
-		
-		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-		glBegin(GL_QUADS);
-		glTexCoord2d(1, 0);
-		glVertex3f(XRES*sdl_scale, (YRES+MENUSIZE)*sdl_scale, 1.0);
-		glTexCoord2d(0, 0);
-		glVertex3f(0, (YRES+MENUSIZE)*sdl_scale, 1.0);
-		glTexCoord2d(0, 1);
-		glVertex3f(0, MENUSIZE*sdl_scale, 1.0);
-		glTexCoord2d(1, 1);
-		glVertex3f(XRES*sdl_scale, MENUSIZE*sdl_scale, 1.0);
-		glEnd();
-		
-		if(cmode==CM_FANCY)
-		{
-			glUseProgram(0);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		}
-		glDisable( GL_TEXTURE_2D );
         
         glBlendFunc(origBlendSrc, origBlendDst);
 #endif
 }
+
+#ifdef OGLR
+void draw_parts_fbo()
+{
+	glEnable( GL_TEXTURE_2D );
+	if(cmode==CM_FANCY)
+	{
+		float xres = XRES, yres = YRES;
+		glUseProgram(lensProg);
+		glActiveTexture(GL_TEXTURE0);			
+		glBindTexture(GL_TEXTURE_2D, partsFboTex);
+		glUniform1i(glGetUniformLocation(lensProg, "pTex"), 0);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, partsTFX);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES, YRES, GL_RED, GL_FLOAT, gravxf);
+		glUniform1i(glGetUniformLocation(lensProg, "tfX"), 1);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, partsTFY);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, XRES, YRES, GL_GREEN, GL_FLOAT, gravyf);
+		glUniform1i(glGetUniformLocation(lensProg, "tfY"), 2);
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1fv(glGetUniformLocation(lensProg, "xres"), 1, &xres);
+		glUniform1fv(glGetUniformLocation(lensProg, "yres"), 1, &yres);
+	}
+	else
+	{	
+		glBindTexture(GL_TEXTURE_2D, partsFboTex);
+		glBlendFunc(GL_ONE, GL_ONE);
+	}
+	
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	glBegin(GL_QUADS);
+	glTexCoord2d(1, 0);
+	glVertex3f(XRES*sdl_scale, (YRES+MENUSIZE)*sdl_scale, 1.0);
+	glTexCoord2d(0, 0);
+	glVertex3f(0, (YRES+MENUSIZE)*sdl_scale, 1.0);
+	glTexCoord2d(0, 1);
+	glVertex3f(0, MENUSIZE*sdl_scale, 1.0);
+	glTexCoord2d(1, 1);
+	glVertex3f(XRES*sdl_scale, MENUSIZE*sdl_scale, 1.0);
+	glEnd();
+	
+	if(cmode==CM_FANCY)
+	{
+		glUseProgram(0);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+	glDisable( GL_TEXTURE_2D );
+}
+#endif
 
 void draw_walls(pixel *vid)
 {
@@ -3221,30 +3246,18 @@ void render_zoom(pixel *img) //draws the zoom box
 {
 #ifdef OGLR
 	int origBlendSrc, origBlendDst;
-	float zcx1, zcx0, zcy1, zcy0, yfactor, xfactor; //X-Factor is shit, btw
+	float zcx1, zcx0, zcy1, zcy0, yfactor, xfactor, i; //X-Factor is shit, btw
 	xfactor = 1.0f/(float)XRES;
 	yfactor = 1.0f/(float)YRES;
-	
+
 	zcx0 = (zoom_x)*xfactor;
 	zcx1 = (zoom_x+ZSIZE)*xfactor;
 	zcy0 = (zoom_y)*yfactor;
 	zcy1 = ((zoom_y+ZSIZE))*yfactor;
-	 
-	 glLineWidth(sdl_scale);
-	glEnable(GL_LINE_SMOOTH);
-	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-	glBegin(GL_LINE_STRIP);
-	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
-	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
-	glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
-	glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
-	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
-	glEnd();
-	glDisable(GL_LINE_SMOOTH);
-	
+
 	glGetIntegerv(GL_BLEND_SRC, &origBlendSrc);
 	glGetIntegerv(GL_BLEND_DST, &origBlendDst);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendFunc(GL_ONE, GL_ZERO);
 
 	glEnable( GL_TEXTURE_2D );
 	//glReadBuffer(GL_AUX0);
@@ -3264,8 +3277,33 @@ void render_zoom(pixel *img) //draws the zoom box
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable( GL_TEXTURE_2D );
 	
-	glBlendFunc(origBlendSrc, origBlendDst);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
+	glLineWidth(sdl_scale);
+	glEnable(GL_LINE_SMOOTH);
+	glBegin(GL_LINES);
+	glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+	for(i = 0; i < ZSIZE; i++)
+	{
+		glVertex2f((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR)+i*ZFACTOR)*sdl_scale);
+		glVertex2f(zoom_wx*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR)+i*ZFACTOR)*sdl_scale);
+		glVertex2f((zoom_wx+i*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale);
+		glVertex2f((zoom_wx+i*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale);
+	}
+	glEnd();
+	
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	glBegin(GL_LINE_STRIP);
+	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
+	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
+	glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-(zoom_wy+ZSIZE*ZFACTOR))*sdl_scale, 0);
+	glVertex3i((zoom_wx+ZSIZE*ZFACTOR)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
+	glVertex3i((zoom_wx-1)*sdl_scale, (YRES+MENUSIZE-zoom_wy)*sdl_scale, 0);
+	glEnd();
+	glDisable(GL_LINE_SMOOTH);
+	
+	glDisable(GL_LINE_SMOOTH);
+
 	if(zoom_en)
 	{	
 		glEnable(GL_COLOR_LOGIC_OP);
@@ -3280,8 +3318,9 @@ void render_zoom(pixel *img) //draws the zoom box
 		glVertex3i((zoom_x-1)*sdl_scale, (YRES+MENUSIZE-(zoom_y-1))*sdl_scale, 0);
 		glEnd();
 		glDisable(GL_COLOR_LOGIC_OP);
-    }
-    glLineWidth(1);
+	}
+	glLineWidth(1);
+	glBlendFunc(origBlendSrc, origBlendDst);
 #else
 	int x, y, i, j;
 	pixel pix;
@@ -3598,6 +3637,7 @@ void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 	int i;
 	if (t<PT_NUM||(t&0xFF)==PT_LIFE||t==SPC_AIR||t==SPC_HEAT||t==SPC_COOL||t==SPC_VACUUM||t==SPC_WIND||t==SPC_PGRV||t==SPC_NGRV)
 	{
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, partsFbo);
 		glEnable(GL_COLOR_LOGIC_OP);
 		glLogicOp(GL_XOR);
 		glBegin(GL_LINE_LOOP);
@@ -3608,29 +3648,30 @@ void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 		rx *= sdl_scale;
 		if (CURRENT_BRUSH==SQUARE_BRUSH)
 		{
-			glVertex2f(x-rx+1, ((YRES+MENUSIZE)*sdl_scale-y)-ry+1);
-			glVertex2f(x+rx+1, ((YRES+MENUSIZE)*sdl_scale-y)-ry+1);
-			glVertex2f(x+rx+1, ((YRES+MENUSIZE)*sdl_scale-y)+ry+1);
-			glVertex2f(x-rx+1, ((YRES+MENUSIZE)*sdl_scale-y)+ry+1);
-			glVertex2f(x-rx+1, ((YRES+MENUSIZE)*sdl_scale-y)-ry+1);
+			glVertex2f(x-rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)-ry+1);
+			glVertex2f(x+rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)-ry+1);
+			glVertex2f(x+rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)+ry+1);
+			glVertex2f(x-rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)+ry+1);
+			glVertex2f(x-rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)-ry+1);
 		}
 		else if (CURRENT_BRUSH==CIRCLE_BRUSH)
 		{
 			for (i = 0; i < 360; i++)
 			{
 			  float degInRad = i*(M_PI/180.0f);
-			  glVertex2f((cos(degInRad)*rx)+x, (sin(degInRad)*ry)+(YRES+MENUSIZE)*sdl_scale-y);
+			  glVertex2f((cos(degInRad)*rx)+x, (sin(degInRad)*ry)+/*(YRES+MENUSIZE)*sdl_scale-*/y);
 			}
 		}
 		else if (CURRENT_BRUSH==TRI_BRUSH)
 		{
-			glVertex2f(x+1, ((YRES+MENUSIZE)*sdl_scale-y)+ry+1);
-			glVertex2f(x+rx+1, ((YRES+MENUSIZE)*sdl_scale-y)-ry+1);
-			glVertex2f(x-rx+1, ((YRES+MENUSIZE)*sdl_scale-y)-ry+1);
-			glVertex2f(x+1, ((YRES+MENUSIZE)*sdl_scale-y)+ry+1);
+			glVertex2f(x+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)+ry+1);
+			glVertex2f(x+rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)-ry+1);
+			glVertex2f(x-rx+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)-ry+1);
+			glVertex2f(x+1, (/*(YRES+MENUSIZE)*sdl_scale-*/y)+ry+1);
 		}
 		glEnd();
 		glDisable(GL_COLOR_LOGIC_OP);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	}
 #else
 	int i,j,c;
@@ -3932,6 +3973,32 @@ int sdl_open(void)
 	return 1;
 }
 #ifdef OGLR
+void checkShader(GLuint shader, char * shname)
+{
+	GLuint status;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		char errorBuf[ GL_INFO_LOG_LENGTH];
+		int errLen;
+		glGetShaderInfoLog(shader, GL_INFO_LOG_LENGTH, &errLen, errorBuf);
+		fprintf(stderr, "Failed to compile %s shader:\n%s\n", shname, errorBuf);
+		exit(1);
+	}
+}
+void checkProgram(GLuint program, char * progname)
+{
+	GLuint status;
+	glGetProgramiv(program, GL_LINK_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		char errorBuf[ GL_INFO_LOG_LENGTH];
+		int errLen;
+		glGetShaderInfoLog(program, GL_INFO_LOG_LENGTH, &errLen, errorBuf);
+		fprintf(stderr, "Failed to link %s program:\n%s\n", progname, errorBuf);
+		exit(1);
+	}
+}
 void loadShaders()
 {
 	GLuint vertexShader, fragmentShader;
@@ -3944,12 +4011,15 @@ void loadShaders()
 	glShaderSource( fragmentShader, 1, &fireFragment, NULL);
 
 	glCompileShader( vertexShader );
+	checkShader(vertexShader, "FV");
 	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "FF");
 
 	fireProg = glCreateProgram();
 	glAttachShader( fireProg, vertexShader );
 	glAttachShader( fireProg, fragmentShader );
 	glLinkProgram( fireProg );
+	checkProgram(fireProg, "F");
 	
 	//Lensing
 	vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -3959,27 +4029,69 @@ void loadShaders()
 	glShaderSource( fragmentShader, 1, &lensFragment, NULL);
 
 	glCompileShader( vertexShader );
+	checkShader(vertexShader, "LV");
 	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "LF");
 
 	lensProg = glCreateProgram();
 	glAttachShader( lensProg, vertexShader );
 	glAttachShader( lensProg, fragmentShader );
 	glLinkProgram( lensProg );
+	checkProgram(lensProg, "L");
 	
-	//Air
+	//Air Velocity
 	vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 
-	glShaderSource( vertexShader, 1, &airVertex, NULL);
-	glShaderSource( fragmentShader, 1, &airFragment, NULL);
+	glShaderSource( vertexShader, 1, &airVVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airVFragment, NULL);
 
 	glCompileShader( vertexShader );
+	checkShader(vertexShader, "AVX");
 	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "AVF");
 
-	airProg = glCreateProgram();
-	glAttachShader( airProg, vertexShader );
-	glAttachShader( airProg, fragmentShader );
-	glLinkProgram( airProg );
+	airProg_Velocity = glCreateProgram();
+	glAttachShader( airProg_Velocity, vertexShader );
+	glAttachShader( airProg_Velocity, fragmentShader );
+	glLinkProgram( airProg_Velocity );
+	checkProgram(airProg_Velocity, "AV");
+	
+	//Air Pressure
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &airPVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airPFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "APV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "APF");
+
+	airProg_Pressure = glCreateProgram();
+	glAttachShader( airProg_Pressure, vertexShader );
+	glAttachShader( airProg_Pressure, fragmentShader );
+	glLinkProgram( airProg_Pressure );
+	checkProgram(airProg_Pressure, "AP");
+	
+	//Air cracker
+	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	glShaderSource( vertexShader, 1, &airCVertex, NULL);
+	glShaderSource( fragmentShader, 1, &airCFragment, NULL);
+
+	glCompileShader( vertexShader );
+	checkShader(vertexShader, "ACV");
+	glCompileShader( fragmentShader );
+	checkShader(fragmentShader, "ACF");
+
+	airProg_Cracker = glCreateProgram();
+	glAttachShader( airProg_Cracker, vertexShader );
+	glAttachShader( airProg_Cracker, fragmentShader );
+	glLinkProgram( airProg_Cracker );
+	checkProgram(airProg_Cracker, "AC");
 }
 #endif
 int draw_debug_info(pixel* vid, int lm, int lx, int ly, int cx, int cy, int line_x, int line_y)

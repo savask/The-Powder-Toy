@@ -9,9 +9,9 @@
  
 //VersionInfoStart
 #define SAVE_VERSION 68
-#define MINOR_VERSION 0
+#define MINOR_VERSION 3
 #define BETA
-#define BUILD_NUM 105
+#define BUILD_NUM 109
 //VersionInfoEnd
 
 #define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter.
@@ -86,8 +86,6 @@ extern unsigned char ZSIZE;
 #define CATALOGUE_S 6
 #define CATALOGUE_Z 3
 
-#define STAMP_X 4
-#define STAMP_Y 4
 #define STAMP_MAX 240
 
 #define NGOL 25
