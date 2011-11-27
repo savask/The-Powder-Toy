@@ -143,6 +143,14 @@ void init_can_move()
 	}
 	can_move[PT_ELEC][PT_LCRY] = 2;
 	can_move[PT_PHOT][PT_LCRY] = 3;//varies according to LCRY life
+	
+	can_move[PT_PHOT][PT_BIZR] = 2;
+	can_move[PT_ELEC][PT_BIZR] = 2;
+	can_move[PT_PHOT][PT_BIZRG] = 2;
+	can_move[PT_ELEC][PT_BIZRG] = 2;
+	can_move[PT_PHOT][PT_BIZRS] = 2;
+	can_move[PT_ELEC][PT_BIZRS] = 2;
+	
 	can_move[PT_NEUT][PT_INVIS] = 2;
 	//whol eats anar
 	can_move[PT_ANAR][PT_WHOL] = 1;
@@ -2242,6 +2250,17 @@ killed:
 						continue;
 					}
 					r = pmap[fin_y][fin_x];
+					
+					if ((r & 0xFF) == PT_PIPE && !(parts[r>>8].tmp&0xFF))
+					{
+						parts[r>>8].tmp =  (parts[r>>8].tmp&~0xFF) | parts[i].type;
+						parts[r>>8].temp = parts[i].temp;
+						parts[r>>8].flags = parts[i].life;
+						parts[r>>8].pavg[0] = parts[i].tmp;
+						parts[r>>8].pavg[1] = parts[i].ctype;
+						kill_part(i);
+						continue;
+					}
 
 					// this should be replaced with a particle type attribute ("photwl" or something)
 					if ((r & 0xFF) == PT_PSCN) parts[i].ctype  = 0x00000000;
