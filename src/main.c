@@ -46,6 +46,7 @@
 #include <misc.h>
 #include <font.h>
 #include <powder.h>
+#include "gravity.h"
 #include <graphics.h>
 #include <powdergraphics.h>
 #include <version.h>
@@ -171,7 +172,6 @@ int do_open = 0;
 int sys_pause = 0;
 int sys_shortcuts = 1;
 int legacy_enable = 0; //Used to disable new features such as heat, will be set by save.
-int ngrav_enable = 0; //Newtonian gravity, will be set by save
 int aheat_enable; //Ambient heat
 int decorations_enable = 1;
 int hud_enable = 1;
@@ -196,12 +196,6 @@ long debug_perf_time = 0;
 sign signs[MAXSIGNS];
 
 int numCores = 4;
-
-pthread_t gravthread;
-pthread_mutex_t gravmutex;
-pthread_cond_t gravcv;
-int grav_ready = 0;
-int gravthread_done = 0;
 
 int core_count()
 {
@@ -551,7 +545,6 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 	int nf=0, new_format = 0, ttv = 0;
 	particle *parts = partsptr;
 	int *fp = malloc(NPART*sizeof(int));
-	parts_lastActiveIndex = NPART-1;
 
 	//New file header uses PSv, replacing fuC. This is to detect if the client uses a new save format for temperatures
 	//This creates a problem for old clients, that display and "corrupt" error instead of a "newer version" error
@@ -636,6 +629,7 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 		}
 		clear_sim();
 	}
+	parts_lastActiveIndex = NPART-1;
 	m = calloc(XRES*YRES, sizeof(int));
 
 	// make a catalog of free parts
@@ -724,35 +718,32 @@ int parse_save(void *save, int size, int replace, int x0, int y0, unsigned char 
 				if (pmap[y][x])
 				{
 					k = pmap[y][x]>>8;
-					memset(parts+k, 0, sizeof(particle));
-					parts[k].type = j;
-					if (j == PT_PHOT)
-						parts[k].ctype = 0x3fffffff;
-					if (j == PT_SOAP)
-						parts[k].ctype = 0;
-					parts[k].x = (float)x;
-					parts[k].y = (float)y;
-					m[(x-x0)+(y-y0)*w] = k+1;
 				}
-				else if (i < nf)
+				else if (i<nf)
 				{
-					memset(parts+fp[i], 0, sizeof(particle));
-					parts[fp[i]].type = j;
-					if (j == PT_COAL)
-						parts[fp[i]].tmp = 50;
-					if (j == PT_FUSE)
-						parts[fp[i]].tmp = 50;
-					if (j == PT_PHOT)
-						parts[fp[i]].ctype = 0x3fffffff;
-					if (j == PT_SOAP)
-						parts[fp[i]].ctype = 0;
-					parts[fp[i]].x = (float)x;
-					parts[fp[i]].y = (float)y;
-					m[(x-x0)+(y-y0)*w] = fp[i]+1;
+					k = fp[i];
 					i++;
 				}
 				else
+				{
 					m[(x-x0)+(y-y0)*w] = NPART+1;
+					continue;
+				}
+				memset(parts+k, 0, sizeof(particle));
+				parts[k].type = j;
+				if (j == PT_COAL)
+					parts[k].tmp = 50;
+				if (j == PT_FUSE)
+					parts[k].tmp = 50;
+				if (j == PT_PHOT)
+					parts[k].ctype = 0x3fffffff;
+				if (j == PT_SOAP)
+					parts[k].ctype = 0;
+				if (j==PT_BIZR || j==PT_BIZRG || j==PT_BIZRS)
+					parts[k].ctype = 0x47FFFF;
+				parts[k].x = (float)x;
+				parts[k].y = (float)y;
+				m[(x-x0)+(y-y0)*w] = k+1;
 			}
 		}
 
@@ -1133,13 +1124,16 @@ corrupt:
 
 void clear_sim(void)
 {
-	int x, y;
+	int i, x, y;
 	memset(bmap, 0, sizeof(bmap));
 	memset(emap, 0, sizeof(emap));
 	memset(signs, 0, sizeof(signs));
 	memset(parts, 0, sizeof(particle)*NPART);
-	pfree = -1;
-	parts_lastActiveIndex = NPART-1;
+	for (i=0; i<NPART-1; i++)
+		parts[i].life = i+1;
+	parts[NPART-1].life = -1;
+	pfree = 0;
+	parts_lastActiveIndex = 0;
 	memset(pmap, 0, sizeof(pmap));
 	memset(pv, 0, sizeof(pv));
 	memset(vx, 0, sizeof(vx));
@@ -1159,15 +1153,15 @@ void clear_sim(void)
 	memset(fire_r, 0, sizeof(fire_r));
 	memset(fire_g, 0, sizeof(fire_g));
 	memset(fire_b, 0, sizeof(fire_b));
-	memset(gravmask, 0xFF, sizeof(gravmask));
-	memset(gravy, 0, sizeof(gravy));
-	memset(gravx, 0, sizeof(gravx));
+	memset(gravmaskf, 0xFF, XRES*YRES*sizeof(unsigned));
+	memset(gravyf, 0, XRES*YRES*sizeof(float));
+	memset(gravxf, 0, XRES*YRES*sizeof(float));
+	memset(gravpf, 0, XRES*YRES*sizeof(float));
 	for(x = 0; x < XRES/CELL; x++){
 		for(y = 0; y < YRES/CELL; y++){
 			hv[y][x] = 273.15f+22.0f; //Set to room temperature
 		}
 	}
-	gravity_mask();
 }
 
 // stamps library
@@ -1453,73 +1447,6 @@ int set_scale(int scale, int kiosk){
 	}
 	return 1;
 }
-				
-void* update_grav_async(void* unused)
-{
-	int done = 0;
-	int thread_done = 0;
-	memset(th_ogravmap, 0, sizeof(th_ogravmap));
-	memset(th_gravmap, 0, sizeof(th_gravmap));
-	memset(th_gravy, 0, sizeof(th_gravy));
-	memset(th_gravx, 0, sizeof(th_gravx));
-#ifdef GRAVFFT
-	grav_fft_init();
-#endif
-	while(!thread_done){
-		if(!done){
-			update_grav();
-			done = 1;
-			pthread_mutex_lock(&gravmutex);
-			
-			grav_ready = done;
-			thread_done = gravthread_done;
-			
-			pthread_mutex_unlock(&gravmutex);
-		} else {
-			pthread_mutex_lock(&gravmutex);
-			pthread_cond_wait(&gravcv, &gravmutex);
-		    
-			done = grav_ready;
-			thread_done = gravthread_done;
-			
-			pthread_mutex_unlock(&gravmutex);
-		}
-	}
-	pthread_exit(NULL);
-}
-
-void start_grav_async()
-{
-	if(!ngrav_enable){
-		gravthread_done = 0;
-		grav_ready = 0;
-		pthread_mutex_init (&gravmutex, NULL);
-		pthread_cond_init(&gravcv, NULL);
-		pthread_create(&gravthread, NULL, update_grav_async, NULL); //Start asynchronous gravity simulation
-		ngrav_enable = 1;
-	}
-	memset(gravyf, 0, sizeof(gravyf));
-	memset(gravxf, 0, sizeof(gravxf));
-	memset(gravpf, 0, sizeof(gravpf));
-}
-
-void stop_grav_async()
-{
-	if(ngrav_enable){
-		pthread_mutex_lock(&gravmutex);
-		gravthread_done = 1;
-		pthread_cond_signal(&gravcv);
-		pthread_mutex_unlock(&gravmutex);
-		pthread_join(gravthread, NULL);
-		pthread_mutex_destroy(&gravmutex); //Destroy the mutex
-		memset(gravy, 0, sizeof(gravy)); //Clear the grav velocities
-		memset(gravx, 0, sizeof(gravx)); //Clear the grav velocities
-		ngrav_enable = 0;
-	}
-	memset(gravyf, 0, sizeof(gravyf));
-	memset(gravxf, 0, sizeof(gravxf));
-	memset(gravpf, 0, sizeof(gravpf));
-}
 
 #ifdef RENDERER
 int main(int argc, char *argv[])
@@ -1651,14 +1578,7 @@ int main(int argc, char *argv[])
 	part_vbuf_store = part_vbuf;
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 
-	//Allocate full size Gravmaps
-	th_gravyf = calloc(XRES*YRES, sizeof(float));
-	th_gravxf = calloc(XRES*YRES, sizeof(float));
-	th_gravpf = calloc(XRES*YRES, sizeof(float));
-	gravyf = calloc(XRES*YRES, sizeof(float));
-	gravxf = calloc(XRES*YRES, sizeof(float));
-	gravpf = calloc(XRES*YRES, sizeof(float));
-
+	gravity_init();
 	GSPEED = 1;
 
 	/* Set 16-bit stereo audio at 22Khz */
@@ -1669,9 +1589,6 @@ int main(int argc, char *argv[])
 	fmt.callback = mixaudio;
 	fmt.userdata = NULL;
 
-#ifdef LUACONSOLE
-	luacon_open();
-#endif
 #ifdef MT
 	numCores = core_count();
 #endif
@@ -1681,6 +1598,10 @@ int main(int argc, char *argv[])
 	cb_parts = calloc(sizeof(particle), NPART);
 	init_can_move();
 	clear_sim();
+	
+#ifdef LUACONSOLE
+	luacon_open();
+#endif
 	
 	colour_mode = COLOUR_DEFAULT;
 	init_display_modes();
@@ -1934,41 +1855,7 @@ int main(int argc, char *argv[])
 		if(sl == WL_GRAV+100 || sr == WL_GRAV+100)
 			draw_grav_zones(part_vbuf);
 		
-		if(ngrav_enable){
-			pthread_mutex_lock(&gravmutex);
-			result = grav_ready;
-			if(result) //Did the gravity thread finish?
-			{
-				memcpy(th_gravmap, gravmap, sizeof(gravmap)); //Move our current gravmap to be processed other thread
-				//memcpy(gravy, th_gravy, sizeof(gravy));	//Hmm, Gravy
-				//memcpy(gravx, th_gravx, sizeof(gravx)); //Move the processed velocity maps to be used
-				//memcpy(gravp, th_gravp, sizeof(gravp));
-
-				if (!sys_pause||framerender){ //Only update if not paused
-					//Switch the full size gravmaps, we don't really need the two above any more
-					float *tmpf;
-					tmpf = gravyf;
-					gravyf = th_gravyf;
-					th_gravyf = tmpf;
-
-					tmpf = gravxf;
-					gravxf = th_gravxf;
-					th_gravxf = tmpf;
-
-					tmpf = gravpf;
-					gravpf = th_gravpf;
-					th_gravpf = tmpf;
-
-					grav_ready = 0; //Tell the other thread that we're ready for it to continue
-					pthread_cond_signal(&gravcv);
-				}
-			}
-			pthread_mutex_unlock(&gravmutex);
-			//Apply the gravity mask
-			membwand(gravy, gravmask, sizeof(gravy), sizeof(gravmask));
-			membwand(gravx, gravmask, sizeof(gravx), sizeof(gravmask));
-		}
-
+		gravity_update_async(); //Check for updated velocity maps from gravity thread
 		if (!sys_pause||framerender) //Only update if not paused
 			memset(gravmap, 0, sizeof(gravmap)); //Clear the old gravmap
 
@@ -3680,9 +3567,7 @@ int main(int argc, char *argv[])
 	
 	SDL_CloseAudio();
 	http_done();
-#ifdef GRAVFFT
-	grav_fft_cleanup();
-#endif
+	gravity_cleanup();
 #ifdef LUACONSOLE
 	luacon_close();
 #endif
