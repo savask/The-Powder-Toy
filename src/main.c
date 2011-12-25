@@ -1153,10 +1153,14 @@ void clear_sim(void)
 	memset(fire_r, 0, sizeof(fire_r));
 	memset(fire_g, 0, sizeof(fire_g));
 	memset(fire_b, 0, sizeof(fire_b));
-	memset(gravmaskf, 0xFF, XRES*YRES*sizeof(unsigned));
-	memset(gravyf, 0, XRES*YRES*sizeof(float));
-	memset(gravxf, 0, XRES*YRES*sizeof(float));
-	memset(gravpf, 0, XRES*YRES*sizeof(float));
+	if(gravmask)
+		memset(gravmask, 0xFFFFFFFF, (XRES/CELL)*(YRES/CELL)*sizeof(unsigned));
+	if(gravy)
+		memset(gravy, 0, (XRES/CELL)*(YRES/CELL)*sizeof(float));
+	if(gravx)
+		memset(gravx, 0, (XRES/CELL)*(YRES/CELL)*sizeof(float));
+	if(gravp)
+		memset(gravp, 0, (XRES/CELL)*(YRES/CELL)*sizeof(float));
 	for(x = 0; x < XRES/CELL; x++){
 		for(y = 0; y < YRES/CELL; y++){
 			hv[y][x] = 273.15f+22.0f; //Set to room temperature
@@ -1470,7 +1474,11 @@ int main(int argc, char *argv[])
 
 	pers_bg = calloc((XRES+BARSIZE)*YRES, PIXELSIZE);
 	
-	prepare_alpha(4, 1.0f);
+	prepare_alpha(CELL, 1.0f);
+	prepare_graphicscache();
+	flm_data = generate_gradient(flm_data_colours, flm_data_pos, flm_data_points, 200);
+	plasma_data = generate_gradient(plasma_data_colours, plasma_data_pos, plasma_data_points, 200);
+	
 	player.elem = player2.elem = PT_DUST;
 	player.frames = player2.frames = 0;
 
@@ -2673,7 +2681,7 @@ int main(int argc, char *argv[])
 				sprintf(heattext, "Empty, Pressure: %3.2f", pv[(y/sdl_scale)/CELL][(x/sdl_scale)/CELL]);
 				if (DEBUG_MODE)
 				{
-					sprintf(coordtext, "X:%d Y:%d. GX: %.2f GY: %.2f", x/sdl_scale, y/sdl_scale, gravxf[((y/sdl_scale)*XRES)+(x/sdl_scale)], gravyf[((y/sdl_scale)*XRES)+(x/sdl_scale)]);
+					sprintf(coordtext, "X:%d Y:%d. GX: %.2f GY: %.2f", x/sdl_scale, y/sdl_scale, gravx[(((y/sdl_scale)/CELL)*(XRES/CELL))+((x/sdl_scale)/CELL)], gravy[(((y/sdl_scale)/CELL)*(XRES/CELL))+((x/sdl_scale)/CELL)]);
 				}
 			}
 		}
@@ -3444,7 +3452,7 @@ int main(int argc, char *argv[])
 			if (DEBUG_MODE)
 				sprintf(uitext, "Build %d FPS:%d Parts:%d Gravity:%d Air:%d", BUILD_NUM, FPSB, NUM_PARTS, gravityMode, airMode);
 			else
-				sprintf(uitext, "FPS:%d", SAVE_VERSION, MINOR_VERSION, FPSB);
+				sprintf(uitext, "FPS:%d", FPSB);
 #endif
 			if (REPLACE_MODE)
 				strappend(uitext, " [REPLACE MODE]");
