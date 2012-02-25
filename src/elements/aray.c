@@ -11,7 +11,7 @@ int update_ARAY(UPDATE_FUNC_ARGS) {
 					r = pmap[y+ry][x+rx];
 					if (!r)
 						continue;
-					if ((r&0xFF)==PT_SPRK) {
+					if ((r&0xFF)==PT_SPRK && parts[r>>8].life==3) {
 						int destroy = (parts[r>>8].ctype==PT_PSCN)?1:0;
 						int nostop = (parts[r>>8].ctype==PT_INST)?1:0;
 						for (docontinue = 1, nxx = 0, nyy = 0, nxi = rx*-1, nyi = ry*-1; docontinue; nyy+=nyi, nxx+=nxi) {
@@ -84,7 +84,7 @@ int update_ARAY(UPDATE_FUNC_ARGS) {
 									parts[r>>8].life = 1;
 									docontinue = 1;
 									//this if prevents red BRAY from stopping on certain materials
-								} else if ((r&0xFF)==PT_STOR || (r&0xFF)==PT_INWR || (r&0xFF)==PT_ARAY || (r&0xFF)==PT_WIFI || (r&0xFF)==PT_FILT || ((r&0xFF)==PT_SWCH && parts[r>>8].life>=10)) {
+								} else if ((r&0xFF)==PT_STOR || (r&0xFF)==PT_INWR || ((r&0xFF)==PT_SPRK && parts[r>>8].ctype==PT_INWR) || (r&0xFF)==PT_ARAY || (r&0xFF)==PT_WIFI || (r&0xFF)==PT_FILT || ((r&0xFF)==PT_SWCH && parts[r>>8].life>=10)) {
 									if((r&0xFF)==PT_STOR)
 									{
 										parts[r>>8].tmp = 0;

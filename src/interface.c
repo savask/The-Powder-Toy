@@ -26,6 +26,7 @@
 #include <pythonconsole.h>
 #endif
 #include <powdergraphics.h>
+#include "save.h"
 
 SDLMod sdl_mod;
 int sdl_key, sdl_rkey, sdl_wheel, sdl_caps=0, sdl_ascii, sdl_zoom_trig=0;
@@ -92,11 +93,18 @@ int drawgrav_enable = 0;
 void menu_count(void)//puts the number of elements in each section into .itemcount
 {
 	int i=0;
+	for (i=0;i<SC_TOTAL;i++)
+	{
+		msections[i].itemcount = 0;
+	}
 	msections[SC_LIFE].itemcount = NGOLALT;
 	msections[SC_WALL].itemcount = UI_WALLCOUNT-4;
 	for (i=0; i<PT_NUM; i++)
 	{
-		msections[ptypes[i].menusection].itemcount+=ptypes[i].menu;
+		if (ptypes[i].menusection<SC_TOTAL)
+		{
+			msections[ptypes[i].menusection].itemcount+=ptypes[i].menu;
+		}
 	}
 
 }
@@ -466,6 +474,10 @@ void ui_edit_process(int mx, int my, int mb, ui_edit *ed)
 void ui_list_process(pixel * vid_buf, int mx, int my, int mb, ui_list *ed)
 {
 	int i, ystart, selected = 0;
+	if(ed->selected > ed->count || ed->selected < -1)
+	{
+		ed->selected = -1;
+	}
 	if(mx > ed->x && mx < ed->x+ed->w && my > ed->y && my < ed->y+ed->h)
 	{
 		ed->focus = 1;
@@ -503,6 +515,8 @@ void ui_list_process(pixel * vid_buf, int mx, int my, int mb, ui_list *ed)
 					}
 					draw_line(vid_buf, ed->x, ystart + i * 16, ed->x+ed->w, ystart + i * 16, 128, 128, 128, XRES+BARSIZE);
 				}
+				if(!selected && mb)
+					break;
 				drawrect(vid_buf, ed->x, ystart, ed->w, ed->count*16, 255, 255, 255, 255);
 				sdl_blit(0, 0, (XRES+BARSIZE), YRES+MENUSIZE, vid_buf, (XRES+BARSIZE));
 				clearrect(vid_buf, ed->x-2, ystart-2, ed->w+4, (ed->count*16)+4);
@@ -526,6 +540,10 @@ void ui_list_process(pixel * vid_buf, int mx, int my, int mb, ui_list *ed)
 
 void ui_list_draw(pixel *vid_buf, ui_list *ed)
 {
+	if(ed->selected > ed->count || ed->selected < -1)
+	{
+		ed->selected = -1;
+	}
 	if (ed->focus)
 	{
 		drawrect(vid_buf, ed->x, ed->y, ed->w, ed->h, 255, 255, 255, 255);
@@ -536,7 +554,7 @@ void ui_list_draw(pixel *vid_buf, ui_list *ed)
 	}
 	if(ed->selected!=-1)
 	{
-		drawtext(vid_buf, ed->x+4, ed->y+5, ed->str, 255, 255, 255, 255);
+		drawtext(vid_buf, ed->x+4, ed->y+5, ed->items[ed->selected], 255, 255, 255, 255);
 	}
 	else
 	{
@@ -1597,7 +1615,7 @@ int stamp_ui(pixel *vid_buf)
 		for (j=0; j<GRID_Y; j++)
 			for (i=0; i<GRID_X; i++)
 			{
-				if (stamps[k].name[0] && stamps[k].thumb)
+				if (stamps[k].name[0])
 				{
 					gx = ((XRES/GRID_X)*i) + (XRES/GRID_X-XRES/GRID_S)/2;
 					gy = ((((YRES-MENUSIZE+20)+15)/GRID_Y)*j) + ((YRES-MENUSIZE+20)/GRID_Y-(YRES-MENUSIZE+20)/GRID_S+10)/2 + 18;
@@ -1608,8 +1626,15 @@ int stamp_ui(pixel *vid_buf)
 					h = stamps[k].thumb_h;
 					x -= w/2;
 					y -= h/2;
-					draw_image(vid_buf, stamps[k].thumb, gx+(((XRES/GRID_S)/2)-(w/2)), gy+(((YRES/GRID_S)/2)-(h/2)), w, h, 255);
-					xor_rect(vid_buf, gx+(((XRES/GRID_S)/2)-(w/2)), gy+(((YRES/GRID_S)/2)-(h/2)), w, h);
+					if (stamps[k].thumb)
+					{
+						draw_image(vid_buf, stamps[k].thumb, gx+(((XRES/GRID_S)/2)-(w/2)), gy+(((YRES/GRID_S)/2)-(h/2)), w, h, 255);
+						xor_rect(vid_buf, gx+(((XRES/GRID_S)/2)-(w/2)), gy+(((YRES/GRID_S)/2)-(h/2)), w, h);
+					}
+					else
+					{
+						drawtext(vid_buf, gx+8, gy+((YRES/GRID_S)/2)-4, "Error loading stamp", 255, 255, 255, 255);
+					}
 					if (mx>=gx+XRES/GRID_S-4 && mx<(gx+XRES/GRID_S)+6 && my>=gy-6 && my<gy+4)
 					{
 						d = k;
@@ -1618,7 +1643,7 @@ int stamp_ui(pixel *vid_buf)
 					}
 					else
 					{
-						if (mx>=gx && mx<gx+(XRES/GRID_S) && my>=gy && my<gy+(YRES/GRID_S))
+						if (mx>=gx && mx<gx+(XRES/GRID_S) && my>=gy && my<gy+(YRES/GRID_S) && stamps[k].thumb)
 						{
 							r = k;
 							drawrect(vid_buf, gx-2, gy-2, XRES/GRID_S+3, YRES/GRID_S+3, 128, 128, 210, 255);
@@ -3700,11 +3725,12 @@ int search_ui(pixel *vid_buf)
 				{
 					if (search_dates[pos]) {
 						char *id_d_temp = malloc(strlen(search_ids[pos])+strlen(search_dates[pos])+2);
-						uri = malloc(strlen(search_ids[pos])*3+strlen(search_dates[pos])*3+strlen(SERVER)+71);
-						strcpy(uri, "http://" SERVER "/Get.api?Op=thumbsmall&ID=");
+						uri = malloc(strlen(search_ids[pos])*3+strlen(search_dates[pos])*3+strlen(STATICSERVER)+71);
+						strcpy(uri, "http://" STATICSERVER "/");
 						strcaturl(uri, search_ids[pos]);
-						strappend(uri, "&Date=");
+						strappend(uri, "_");
 						strcaturl(uri, search_dates[pos]);
+						strappend(uri, "_small.pti");
 
 						strcpy(id_d_temp, search_ids[pos]);
 						strappend(id_d_temp, "_");
@@ -3713,8 +3739,9 @@ int search_ui(pixel *vid_buf)
 						free(id_d_temp);
 					} else {
 						uri = malloc(strlen(search_ids[pos])*3+strlen(SERVER)+64);
-						strcpy(uri, "http://" SERVER "/Get.api?Op=thumbsmall&ID=");
+						strcpy(uri, "http://" STATICSERVER "/");
 						strcaturl(uri, search_ids[pos]);
+						strappend(uri, "_small.pti");
 						img_id[i] = mystrdup(search_ids[pos]);
 					}
 					printf("Not found: %s, downloading\n", img_id[i]);
@@ -3910,36 +3937,42 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 	//Begin Async loading of data
 	if (save_date) {
 		// We're loading an historical save
-		uri = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(SERVER)+71);
-		strcpy(uri, "http://" SERVER "/Get.api?Op=save&ID=");
+		uri = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(STATICSERVER)+71);
+		strcpy(uri, "http://" STATICSERVER "/");
 		strcaturl(uri, save_id);
-		strappend(uri, "&Date=");
+		strappend(uri, "_");
 		strcaturl(uri, save_date);
+		strappend(uri, ".cps");
 
-		uri_2 = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(SERVER)+71);
-		strcpy(uri_2, "http://" SERVER "/Info.api?ID=");
+		uri_2 = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(STATICSERVER)+71);
+		strcpy(uri_2, "http://" STATICSERVER "/");
 		strcaturl(uri_2, save_id);
-		strappend(uri_2, "&Date=");
+		strappend(uri_2, "_");
 		strcaturl(uri_2, save_date);
+		strappend(uri_2, ".info");
 
-		uri_3 = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(SERVER)+71);
-		strcpy(uri_3, "http://" SERVER "/Get.api?Op=thumblarge&ID=");
+		uri_3 = malloc(strlen(save_id)*3+strlen(save_date)*3+strlen(STATICSERVER)+71);
+		strcpy(uri_3, "http://" STATICSERVER "/");
 		strcaturl(uri_3, save_id);
-		strappend(uri_3, "&Date=");
+		strappend(uri_3, "_");
 		strcaturl(uri_3, save_date);
+		strappend(uri_3, "_large.pti");
 	} else {
 		//We're loading a normal save
-		uri = malloc(strlen(save_id)*3+strlen(SERVER)+64);
-		strcpy(uri, "http://" SERVER "/Get.api?Op=save&ID=");
+		uri = malloc(strlen(save_id)*3+strlen(STATICSERVER)+64);
+		strcpy(uri, "http://" STATICSERVER "/");
 		strcaturl(uri, save_id);
+		strappend(uri, ".cps");
 
-		uri_2 = malloc(strlen(save_id)*3+strlen(SERVER)+64);
-		strcpy(uri_2, "http://" SERVER "/Info.api?ID=");
+		uri_2 = malloc(strlen(save_id)*3+strlen(STATICSERVER)+64);
+		strcpy(uri_2, "http://" STATICSERVER "/");
 		strcaturl(uri_2, save_id);
+		strappend(uri_2, ".info");
 
-		uri_3 = malloc(strlen(save_id)*3+strlen(SERVER)+64);
-		strcpy(uri_3, "http://" SERVER "/Get.api?Op=thumblarge&ID=");
+		uri_3 = malloc(strlen(save_id)*3+strlen(STATICSERVER)+64);
+		strcpy(uri_3, "http://" STATICSERVER "/");
 		strcaturl(uri_3, save_id);
+		strappend(uri_3, "_large.pti");
 	}
 	http = http_async_req_start(http, uri, NULL, 0, 1);
 	http_2 = http_async_req_start(http_2, uri_2, NULL, 0, 1);
@@ -4265,7 +4298,7 @@ int open_ui(pixel *vid_buf, char *save_id, char *save_date)
 		if (queue_open) {
 			if (info_ready && data_ready) {
 				// Do Open!
-				status = parse_save(data, data_size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
+				status = parse_save(data, data_size, 1, 0, 0, bmap, vx, vy, pv, fvx, fvy, signs, parts, pmap);
 				if (!status) {
 					if(svf_last)
 						free(svf_last);
@@ -4827,7 +4860,7 @@ void execute_save(pixel *vid_buf)
 	plens[0] = strlen(svf_name);
 	uploadparts[1] = svf_description;
 	plens[1] = strlen(svf_description);
-	uploadparts[2] = build_save(plens+2, 0, 0, XRES, YRES, bmap, fvx, fvy, signs, parts);
+	uploadparts[2] = build_save(plens+2, 0, 0, XRES, YRES, bmap, vx, vy, pv, fvx, fvy, signs, parts);
 	uploadparts[3] = build_thumb(plens+3, 1);
 	uploadparts[4] = (svf_publish==1)?"Public":"Private";
 	plens[4] = strlen((svf_publish==1)?"Public":"Private");
@@ -5945,9 +5978,12 @@ int save_filename_ui(pixel *vid_buf)
 	pixel *save = NULL;//calloc((XRES/3)*(YRES/3), PIXELSIZE);
 	ui_edit ed;
 
-	save_data = build_save(&save_size, 0, 0, XRES, YRES, bmap, fvx, fvy, signs, parts);
+	save_data = build_save(&save_size, 0, 0, XRES, YRES, bmap, vx, vy, pv, fvx, fvy, signs, parts);
 	save_data_image = prerender_save(save_data, save_size, &imgw, &imgh);
-	save = resample_img(save_data_image, imgw, imgh, XRES/3, YRES/3);	
+	if(save_data_image!=NULL)
+	{
+		save = resample_img(save_data_image, imgw, imgh, XRES/3, YRES/3);
+	}
 
 	ed.x = x0+11;
 	ed.y = y0+25;
@@ -5993,7 +6029,10 @@ int save_filename_ui(pixel *vid_buf)
 		drawrect(vid_buf, x0, y0, xsize, ysize, 192, 192, 192, 255);
 		drawtext(vid_buf, x0+8, y0+8, "Filename:", 255, 255, 255, 255);
 		drawrect(vid_buf, x0+8, y0+20, xsize-16, 16, 255, 255, 255, 180);
-		draw_image(vid_buf, save, x0+8, y0+40, XRES/3, YRES/3, 255);
+		if(save!=NULL)
+		{
+			draw_image(vid_buf, save, x0+8, y0+40, XRES/3, YRES/3, 255);
+		}
 		drawrect(vid_buf, x0+8, y0+40, XRES/3, YRES/3, 192, 192, 192, 255);
 		
 		drawrect(vid_buf, x0, y0+ysize-16, xsize, 16, 192, 192, 192, 255);
@@ -6041,6 +6080,13 @@ int save_filename_ui(pixel *vid_buf)
 						{
 							strncpy(svf_filename, savefname, 255);
 							svf_fileopen = 1;
+							
+							//Allow reloading
+							if(svf_last)
+								free(svf_last);
+							svf_last = malloc(save_size);
+							memcpy(svf_last, save_data, save_size);
+							svf_lsize = save_size;
 						}
 						break;
 					} else {
@@ -6204,7 +6250,7 @@ void catalogue_ui(pixel * vid_buf)
 						void *data;
 						data = file_load(csave->filename, &size);
 						if(data){
-							status = parse_save(data, size, 1, 0, 0, bmap, fvx, fvy, signs, parts, pmap);
+							status = parse_save(data, size, 1, 0, 0, bmap, vx, vy, pv, fvx, fvy, signs, parts, pmap);
 							if(!status)
 							{
 								//svf_filename[0] = 0;
@@ -6245,13 +6291,13 @@ void catalogue_ui(pixel * vid_buf)
 							csave->image = resample_img(tmpimage, imgwidth, imgheight, XRES/CATALOGUE_S, YRES/CATALOGUE_S);
 							free(tmpimage);
 						} else {
-							//Blank image, this should default to something else
-							csave->image = malloc((XRES/CATALOGUE_S)*(YRES/CATALOGUE_S)*PIXELSIZE);
+							//Blank image, TODO: this should default to something else
+							csave->image = calloc((XRES/CATALOGUE_S)*(YRES/CATALOGUE_S), PIXELSIZE);
 						}
 						free(data);
 					} else {
-						//Blank image, this should default to something else
-						csave->image = malloc((XRES/CATALOGUE_S)*(YRES/CATALOGUE_S)*PIXELSIZE);
+						//Blank image, TODO: this should default to something else
+						csave->image = calloc((XRES/CATALOGUE_S)*(YRES/CATALOGUE_S), PIXELSIZE);
 					}
 					imageoncycle = 1;
 				}
@@ -6629,7 +6675,7 @@ void render_ui(pixel * vid_buf, int xcoord, int ycoord, int orientation)
 void simulation_ui(pixel * vid_buf)
 {
 	int xsize = 300;
-	int ysize = 192;
+	int ysize = 246;
 	int x0=(XRES-xsize)/2,y0=(YRES-MENUSIZE-ysize)/2,b=1,bq,mx,my;
 	int new_scale, new_kiosk;
 	ui_checkbox cb;
@@ -6638,6 +6684,12 @@ void simulation_ui(pixel * vid_buf)
 	ui_checkbox cb4;
 	ui_checkbox cb5;
 	ui_checkbox cb6;
+	char * airModeList[] = {"On", "Pressure Off", "Velocity Off", "Off", "No Update"};
+	int airModeListCount = 5;
+	char * gravityModeList[] = {"Vertical", "Off", "Radial"};
+	int gravityModeListCount = 3;
+	ui_list list;
+	ui_list list2;
 
 	cb.x = x0+xsize-16;		//Heat simulation
 	cb.y = y0+23;
@@ -6650,12 +6702,12 @@ void simulation_ui(pixel * vid_buf)
 	cb2.checked = ngrav_enable;
 	
 	cb3.x = x0+xsize-16;	//Large window
-	cb3.y = y0+143;
+	cb3.y = y0+199;
 	cb3.focus = 0;
 	cb3.checked = (sdl_scale==2)?1:0;
 	
 	cb4.x = x0+xsize-16;	//Fullscreen
-	cb4.y = y0+157;
+	cb4.y = y0+213;
 	cb4.focus = 0;
 	cb4.checked = (kiosk_enable==1)?1:0;
 	
@@ -6664,10 +6716,28 @@ void simulation_ui(pixel * vid_buf)
 	cb5.focus = 0;
 	cb5.checked = aheat_enable;
 
-	cb6.x = x0+xsize-16;	//Ambient heat
+	cb6.x = x0+xsize-16;	//Water equalisation
 	cb6.y = y0+107;
 	cb6.focus = 0;
 	cb6.checked = water_equal_test;
+	
+	list.x = x0+xsize-76;	//Air Mode
+	list.y = y0+135;
+	list.w = 72;
+	list.h = 16;
+	list.def = "[air mode]";
+	list.selected = airMode;
+	list.items = airModeList;
+	list.count = airModeListCount;
+	
+	list2.x = x0+xsize-76;	//Gravity Mode
+	list2.y = y0+163;
+	list2.w = 72;
+	list2.h = 16;
+	list2.def = "[gravity mode]";
+	list2.selected = gravityMode;
+	list2.items = gravityModeList;
+	list2.count = gravityModeListCount;
 
 	while (!sdl_poll())
 	{
@@ -6703,13 +6773,19 @@ void simulation_ui(pixel * vid_buf)
 		drawtext(vid_buf, x0+12+textwidth("Water Equalization Test"), y0+110, "Introduced in version 61.", 255, 255, 255, 180);
 		drawtext(vid_buf, x0+12, y0+124, "May lag with lots of water.", 255, 255, 255, 120);
 		
-		draw_line(vid_buf, x0, y0+138, x0+xsize, y0+138, 150, 150, 150, XRES+BARSIZE);
+		drawtext(vid_buf, x0+8, y0+138, "Air Simulation Mode", 255, 255, 255, 255);
+		drawtext(vid_buf, x0+12, y0+152, "airMode", 255, 255, 255, 120);
 		
-		drawtext(vid_buf, x0+8, y0+144, "Large window", 255, 255, 255, 255);
-		drawtext(vid_buf, x0+12+textwidth("Large window"), y0+144, "Double window size for small screens", 255, 255, 255, 180);
+		drawtext(vid_buf, x0+8, y0+166, "Gravity Simulation Mode", 255, 255, 255, 255);
+		drawtext(vid_buf, x0+12, y0+180, "gravityMode", 255, 255, 255, 120);
 		
-		drawtext(vid_buf, x0+8, y0+158, "Fullscreen", 255, 255, 255, 255);
-		drawtext(vid_buf, x0+12+textwidth("Fullscreen"), y0+158, "Fill the entire screen", 255, 255, 255, 180);
+		draw_line(vid_buf, x0, y0+194, x0+xsize, y0+194, 150, 150, 150, XRES+BARSIZE);
+		
+		drawtext(vid_buf, x0+8, y0+200, "Large window", 255, 255, 255, 255);
+		drawtext(vid_buf, x0+12+textwidth("Large window"), y0+200, "Double window size for small screens", 255, 255, 255, 180);
+		
+		drawtext(vid_buf, x0+8, y0+214, "Fullscreen", 255, 255, 255, 255);
+		drawtext(vid_buf, x0+12+textwidth("Fullscreen"), y0+214, "Fill the entire screen", 255, 255, 255, 180);
 
 		//TODO: Options for Air and Normal gravity
 		//Maybe save/load defaults too.
@@ -6723,6 +6799,8 @@ void simulation_ui(pixel * vid_buf)
 		ui_checkbox_draw(vid_buf, &cb4);
 		ui_checkbox_draw(vid_buf, &cb5);
 		ui_checkbox_draw(vid_buf, &cb6);
+		ui_list_draw(vid_buf, &list);
+		ui_list_draw(vid_buf, &list2);
 		sdl_blit(0, 0, (XRES+BARSIZE), YRES+MENUSIZE, vid_buf, (XRES+BARSIZE));
 		ui_checkbox_process(mx, my, b, bq, &cb);
 		ui_checkbox_process(mx, my, b, bq, &cb2);
@@ -6730,6 +6808,8 @@ void simulation_ui(pixel * vid_buf)
 		ui_checkbox_process(mx, my, b, bq, &cb4);
 		ui_checkbox_process(mx, my, b, bq, &cb5);
 		ui_checkbox_process(mx, my, b, bq, &cb6);
+		ui_list_process(vid_buf, mx, my, b, &list);
+		ui_list_process(vid_buf, mx, my, b, &list2);
 
 		if (b && !bq && mx>=x0 && mx<x0+xsize && my>=y0+ysize-16 && my<=y0+ysize)
 			break;
@@ -6745,6 +6825,10 @@ void simulation_ui(pixel * vid_buf)
 	aheat_enable = cb5.checked;
 	new_scale = (cb3.checked)?2:1;
 	new_kiosk = (cb4.checked)?1:0;
+	if(list.selected>=0 && list.selected<=4)
+		airMode = list.selected;
+	if(list2.selected>=0 && list2.selected<=2)
+		gravityMode = list2.selected;
 	if(new_scale!=sdl_scale || new_kiosk!=kiosk_enable)
 	{
 		if (!set_scale(new_scale, new_kiosk))

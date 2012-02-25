@@ -237,9 +237,9 @@
 #define PROP_CONDUCTS		0x00020 //32 Conducts electricity
 #define PROP_BLACK			0x00040 //64 Absorbs Photons (not currently implemented or used, a photwl attribute might be better)
 #define PROP_NEUTPENETRATE	0x00080 //128 Penetrated by neutrons
-#define PROP_NEUTABSORB		0x00100 //256 Absorbs neutrons, reflect is default (not currently implemented or used)
+#define PROP_NEUTABSORB		0x00100 //256 Absorbs neutrons, reflect is default
 #define PROP_NEUTPASS		0x00200 //512 Neutrons pass through, such as with glass
-#define PROP_DEADLY			0x00400 //1024 Is deadly for stickman (not currently implemented or used)
+#define PROP_DEADLY			0x00400 //1024 Is deadly for stickman
 #define PROP_HOT_GLOW		0x00800 //2048 Hot Metal Glow
 #define PROP_LIFE			0x01000 //4096 Is a GoL type
 #define PROP_RADIOACTIVE	0x02000 //8192 Radioactive
@@ -249,6 +249,7 @@
 #define PROP_SPARKSETTLE	0x20000	//2^17 Allow Sparks/Embers to settle
 
 #define FLAG_STAGNANT	1
+#define FLAG_SKIPMOVE	0x2 // skip movement for one frame, only implemented for PHOT
 
 #define GRAPHICS_FUNC_ARGS particle *cpart, int nx, int ny, int *pixel_mode, int* cola, int *colr, int *colg, int *colb, int *firea, int *firer, int *fireg, int *fireb
 #define GRAPHICS_FUNC_SUBCALL_ARGS cpart, nx, ny, pixel_mode, cola, colr, colg, colb, firea, firer, fireg, fireb
@@ -343,6 +344,7 @@ int update_ARAY(UPDATE_FUNC_ARGS);
 int update_BCLN(UPDATE_FUNC_ARGS);
 int update_BCOL(UPDATE_FUNC_ARGS);
 int update_BMTL(UPDATE_FUNC_ARGS);
+int update_BRMT(UPDATE_FUNC_ARGS);
 int update_BOMB(UPDATE_FUNC_ARGS);
 int update_BOYL(UPDATE_FUNC_ARGS);
 int update_BTRY(UPDATE_FUNC_ARGS);
@@ -689,7 +691,7 @@ static wall_type wtypes[] =
 	{PIXPACK(0x808080), PIXPACK(0x000000), 0, "Erases walls."},
 	{PIXPACK(0x808080), PIXPACK(0x000000), 3, "Wall. Indestructible. Blocks everything."},
 	{PIXPACK(0x3C3C3C), PIXPACK(0x000000), 1, "Wall. Indestructible. Blocks particles, allows air"},
-	{PIXPACK(0x575757), PIXPACK(0x000000), 1, "Wall. Indestructible. Blocks liquids and gasses, allows solids"},
+	{PIXPACK(0x575757), PIXPACK(0x000000), 1, "Wall. Indestructible. Blocks liquids and gasses, allows powders"},
 	{PIXPACK(0xFFFF22), PIXPACK(0x101010), 2, "Conductor, allows particles, conducts electricity"},
 	{PIXPACK(0x242424), PIXPACK(0x101010), 0, "E-Hole, absorbs particles, release them when powered"},
 	{PIXPACK(0xFFFFFF), PIXPACK(0x000000), -1, "Air, creates airflow and pressure"},
@@ -790,8 +792,6 @@ int flood_parts(int x, int y, int c, int cm, int bm, int flags);
 int create_parts(int x, int y, int rx, int ry, int c, int flags);
 
 void create_line(int x1, int y1, int x2, int y2, int rx, int ry, int c, int flags);
-
-void *transform_save(void *odata, int *size, matrix2d transform, vector2d translate);
 
 void orbitalparts_get(int block1, int block2, int resblock1[], int resblock2[]);
 

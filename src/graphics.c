@@ -3056,15 +3056,18 @@ void render_signs(pixel *vid_buf)
 			//Displaying special information
 			if (strcmp(signs[i].text, "{p}")==0)
 			{
-				sprintf(buff, "Pressure: %3.2f", pv[signs[i].y/CELL][signs[i].x/CELL]);  //...pressure
+				float pressure = 0.0f;
+				if (signs[i].x>=0 && signs[i].x<XRES && signs[i].y>=0 && signs[i].y<YRES)
+					pressure = pv[signs[i].y/CELL][signs[i].x/CELL];
+				sprintf(buff, "Pressure: %3.2f", pressure);  //...pressure
 				drawtext(vid_buf, x+3, y+3, buff, 255, 255, 255, 255);
 			}
 			if (strcmp(signs[i].text, "{t}")==0)
 			{
-				if (pmap[signs[i].y][signs[i].x])
-					sprintf(buff, "Temp: %4.2f", parts[pmap[signs[i].y][signs[i].x]>>8].temp-273.15);  //...tempirature
+				if (signs[i].x>=0 && signs[i].x<XRES && signs[i].y>=0 && signs[i].y<YRES && pmap[signs[i].y][signs[i].x])
+					sprintf(buff, "Temp: %4.2f", parts[pmap[signs[i].y][signs[i].x]>>8].temp-273.15);  //...temperature
 				else
-					sprintf(buff, "Temp: 0.00");  //...tempirature
+					sprintf(buff, "Temp: 0.00");  //...temperature
 				drawtext(vid_buf, x+3, y+3, buff, 255, 255, 255, 255);
 			}
 
@@ -3167,8 +3170,8 @@ void render_fire(pixel *vid)
 			g = fire_g[j][i];
 			b = fire_b[j][i];
 			if (r || g || b)
-				for (y=-CELL+1; y<2*CELL; y++)
-					for (x=-CELL+1; x<2*CELL; x++)
+				for (y=-CELL; y<2*CELL; y++)
+					for (x=-CELL; x<2*CELL; x++)
 						addpixel(vid, i*CELL+x, j*CELL+y, r, g, b, fire_alpha[y+CELL][x+CELL]);
 			r *= 8;
 			g *= 8;
@@ -3483,198 +3486,6 @@ void render_zoom(pixel *img) //draws the zoom box
 		}
 	}
 #endif
-}
-
-//gets the thumbnail preview for stamps
-pixel *prerender_save(void *save, int size, int *width, int *height)
-{
-	unsigned char *d,*c=save;
-	int i,j,k,x,y,rx,ry,p=0;
-	int bw,bh,w,h,new_format = 0;
-	pixel *fb;
-
-	if (size<16)
-		return NULL;
-	if (!(c[2]==0x43 && c[1]==0x75 && c[0]==0x66) && !(c[2]==0x76 && c[1]==0x53 && c[0]==0x50))
-		return NULL;
-	if (c[2]==0x43 && c[1]==0x75 && c[0]==0x66) {
-		new_format = 1;
-	}
-	if (c[4]>SAVE_VERSION)
-		return NULL;
-
-	bw = c[6];
-	bh = c[7];
-	w = bw*CELL;
-	h = bh*CELL;
-
-	if (c[5]!=CELL)
-		return NULL;
-
-	i = (unsigned)c[8];
-	i |= ((unsigned)c[9])<<8;
-	i |= ((unsigned)c[10])<<16;
-	i |= ((unsigned)c[11])<<24;
-	d = malloc(i);
-	if (!d)
-		return NULL;
-	fb = calloc(w*h, PIXELSIZE);
-	if (!fb)
-	{
-		free(d);
-		return NULL;
-	}
-
-	if (BZ2_bzBuffToBuffDecompress((char *)d, (unsigned *)&i, (char *)(c+12), size-12, 0, 0))
-		goto corrupt;
-	size = i;
-
-	if (size < bw*bh)
-		goto corrupt;
-
-	k = 0;
-	for (y=0; y<bh; y++)
-		for (x=0; x<bw; x++)
-		{
-			rx = x*CELL;
-			ry = y*CELL;
-			switch (d[p])
-			{
-			case 1:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case 2:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case 3:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(j%2) && !(i%2))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0xC0C0C0);
-				break;
-			case 4:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x8080FF);
-				k++;
-				break;
-			case 6:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0xFF8080);
-				break;
-			case 7:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(i&j&1))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case 8:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(j%2) && !(i%2))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0xC0C0C0);
-						else
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case WL_WALL:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case WL_DESTROYALL:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case WL_ALLOWLIQUID:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(j%2) && !(i%2))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0xC0C0C0);
-				break;
-			case WL_FAN:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0x8080FF);
-				k++;
-				break;
-			case WL_DETECT:
-				for (j=0; j<CELL; j+=2)
-					for (i=(j>>1)&1; i<CELL; i+=2)
-						fb[(ry+j)*w+(rx+i)] = PIXPACK(0xFF8080);
-				break;
-			case WL_EWALL:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(i&j&1))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			case WL_WALLELEC:
-				for (j=0; j<CELL; j++)
-					for (i=0; i<CELL; i++)
-						if (!(j%2) && !(i%2))
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0xC0C0C0);
-						else
-							fb[(ry+j)*w+(rx+i)] = PIXPACK(0x808080);
-				break;
-			}
-			p++;
-		}
-	p += 2*k;
-	if (p>=size)
-		goto corrupt;
-
-	for (y=0; y<h; y++)
-		for (x=0; x<w; x++)
-		{
-			if (p >= size)
-				goto corrupt;
-			j=d[p++];
-			if (j<PT_NUM && j>0)
-			{
-				if (j==PT_STKM || j==PT_STKM2 || j==PT_FIGH)
-				{
-					pixel lc, hc=PIXRGB(255, 224, 178);
-					if (j==PT_STKM || j==PT_FIGH) lc = PIXRGB(255, 255, 255);
-					else lc = PIXRGB(100, 100, 255);
-					//only need to check upper bound of y coord - lower bounds and x<w are checked in draw_line
-					draw_line(fb , x-2, y-2, x+2, y-2, PIXR(hc), PIXG(hc), PIXB(hc), w);
-					if (y+2<h)
-					{
-						draw_line(fb , x-2, y+2, x+2, y+2, PIXR(hc), PIXG(hc), PIXB(hc), w);
-						draw_line(fb , x-2, y-2, x-2, y+2, PIXR(hc), PIXG(hc), PIXB(hc), w);
-						draw_line(fb , x+2, y-2, x+2, y+2, PIXR(hc), PIXG(hc), PIXB(hc), w);
-					}
-					if (y+6<h)
-					{
-						draw_line(fb , x, y+3, x-1, y+6, PIXR(lc), PIXG(lc), PIXB(lc), w);
-						draw_line(fb , x, y+3, x+1, y+6, PIXR(lc), PIXG(lc), PIXB(lc), w);
-					}
-					if (y+12<h)
-					{
-						draw_line(fb , x-1, y+6, x-3, y+12, PIXR(lc), PIXG(lc), PIXB(lc), w);
-						draw_line(fb , x+1, y+6, x+3, y+12, PIXR(lc), PIXG(lc), PIXB(lc), w);
-					}
-				}
-				else
-					fb[y*w+x] = ptypes[j].pcolors;
-			}
-		}
-
-	free(d);
-	*width = w;
-	*height = h;
-	return fb;
-
-corrupt:
-	free(d);
-	free(fb);
-	return NULL;
 }
 
 int render_thumb(void *thumb, int size, int bzip2, pixel *vid_buf, int px, int py, int scl)
