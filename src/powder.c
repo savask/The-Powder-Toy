@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <math.h>
 #include <defines.h>
-#include <squares.h>
 #include <powder.h>
 #include <air.h>
 #include <misc.h>
@@ -237,7 +236,7 @@ int try_move(int i, int x, int y, int nx, int ny)
 
 	if (!e) //if no movement
 	{
-		if (parts[i].type!=PT_NEUT && parts[i].type!=PT_PHOT)
+		if (parts[i].type!=PT_NEUT && parts[i].type!=PT_PHOT && parts[i].type!=PT_ELEC)
 			return 0;
 		if (!legacy_enable && parts[i].type==PT_PHOT && r)//PHOT heat conduction
 		{
@@ -1067,7 +1066,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 	//and finally set the pmap/photon maps to the newly created particle
 	if (t==PT_PHOT||t==PT_NEUT||t==PT_ELEC)
 		photons[y][x] = t|(i<<8);
-	if (t!=PT_STKM&&t!=PT_STKM2 && t!=PT_FIGH && t!=PT_PHOT && t!=PT_NEUT)
+	else if (t!=PT_STKM && t!=PT_STKM2 && t!=PT_FIGH)
 		pmap[y][x] = t|(i<<8);
 		
 	//Fancy dust effects for powder types
@@ -1813,8 +1812,8 @@ void update_particles_i(pixel *vid, int start, int inc)
 			{
 #ifdef REALISTIC
 				//The magic number controlls diffusion speed
-				parts[i].vx += 0.05*squares[(unsigned int)round(parts[i].temp)]*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
-				parts[i].vy += 0.05*squares[(unsigned int)round(parts[i].temp)]*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
+				parts[i].vx += 0.05f*sqrtf(parts[i].temp)*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
+				parts[i].vy += 0.05f*sqrtf(parts[i].temp)*ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
 #else
 				parts[i].vx += ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
 				parts[i].vy += ptypes[t].diffusion*(rand()/(0.5f*RAND_MAX)-1.0f);
@@ -2610,7 +2609,7 @@ void update_particles(pixel *vid)//doesn't update the particles themselves, but 
 			y = (int)(parts[i].y+0.5f);
 			if (x>=0 && y>=0 && x<XRES && y<YRES)
 			{
-				if (t==PT_PHOT||t==PT_NEUT)
+				if (t==PT_PHOT||t==PT_NEUT||t==PT_ELEC)
 					photons[y][x] = t|(i<<8);
 				else
 					pmap[y][x] = t|(i<<8);
@@ -3062,7 +3061,9 @@ int create_parts(int x, int y, int rx, int ry, int c, int flags, int fill)
 		return 1;
 	}
 
-	if (c == 0 && !(flags&BRUSH_REPLACEMODE))								// delete
+	if (c == SPC_AIR || c == SPC_HEAT || c == SPC_COOL || c == SPC_VACUUM || c == SPC_PGRV || c == SPC_NGRV)
+		fn = 3;
+	else if (c == 0 && !(flags&BRUSH_REPLACEMODE))								// delete
 		fn = 0;
 	else if ((flags&BRUSH_SPECIFIC_DELETE) && !(flags&BRUSH_REPLACEMODE))	// specific delete
 		fn = 1;
@@ -3081,17 +3082,17 @@ int create_parts(int x, int y, int rx, int ry, int c, int flags, int fill)
 	{
 		int tempy = y, i, j, jmax, oldy;
 		if (CURRENT_BRUSH == TRI_BRUSH)
-			tempy = y + ry;
+			tempy = y + ry - 1;
 		for (i = x - rx; i <= x; i++) {
 			oldy = tempy;
 			while (InCurrentBrush(i-x,tempy-y,rx,ry))
 				tempy = tempy - 1;
 			tempy = tempy + 1;
-			jmax = 2*y - tempy;
-			if (CURRENT_BRUSH == TRI_BRUSH)
-				jmax = y + ry;
 			if (fill)
 			{
+				jmax = 2*y - tempy;
+				if (CURRENT_BRUSH == TRI_BRUSH)
+					jmax = y + ry;
 				for (j = tempy; j <= jmax; j++) {
 					if (create_parts2(fn,i,j,c,rx,ry,flags))
 						f = 1;
@@ -3103,8 +3104,8 @@ int create_parts(int x, int y, int rx, int ry, int c, int flags, int fill)
 			{
 				if ((oldy != tempy && CURRENT_BRUSH != SQUARE_BRUSH) || i == x-rx)
 					oldy--;
-				if (CURRENT_BRUSH == TRI_BRUSH)
-					oldy = tempy;
+				//if (CURRENT_BRUSH == TRI_BRUSH)
+				//	oldy = tempy;
 				for (j = tempy; j <= oldy+1; j++) {
 					int i2 = 2*x-i, j2 = 2*y-j;
 					if (CURRENT_BRUSH == TRI_BRUSH)

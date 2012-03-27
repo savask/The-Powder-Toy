@@ -1,6 +1,9 @@
 #include <math.h>
 #include <SDL/SDL.h>
 #include <bzlib.h>
+#ifdef WIN32
+#include <SDL/SDL_syswm.h>
+#endif
 
 #if defined(OGLR)
 #ifdef MACOSX
@@ -28,6 +31,15 @@
 #include <font.h>
 #include <misc.h>
 #include "hmap.h"
+
+#if defined(LIN32) || defined(LIN64)
+#include "icon.h"
+#endif
+
+
+#ifdef WIN32
+IMAGE_DOS_HEADER __ImageBase;
+#endif
 
 //unsigned cmode = CM_FIRE;
 unsigned int *render_modes;
@@ -77,6 +89,13 @@ void init_display_modes()
 	render_modes[0] = RENDER_FIRE;
 	render_modes[1] = 0;
 	
+	update_display_modes();
+}
+
+// Combine all elements of the display_modes and render_modes arrays into single variables using bitwise or
+void update_display_modes()
+{
+	int i;
 	display_mode = 0;
 	i = 0;
 	while(display_modes[i])
@@ -3685,15 +3704,14 @@ void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 				xor_pixel(x, j, vid);
 		else
 		{
-			int tempy = y, i, j, jmax, oldy;
+			int tempy = y, i, j, oldy;
 			if (CURRENT_BRUSH == TRI_BRUSH)
-				tempy = y + ry;
+				tempy = y + ry - 1;
 			for (i = x - rx; i <= x; i++) {
 				oldy = tempy;
 				while (InCurrentBrush(i-x,tempy-y,rx,ry))
 					tempy = tempy - 1;
 				tempy = tempy + 1;
-				jmax = 2*y - tempy;
 				if (oldy != tempy && CURRENT_BRUSH != SQUARE_BRUSH)
 					oldy--;
 				if (CURRENT_BRUSH == TRI_BRUSH)
@@ -3745,12 +3763,38 @@ void render_cursor(pixel *vid, int x, int y, int t, int rx, int ry)
 int sdl_opened = 0;
 int sdl_open(void)
 {
+#ifdef WIN32
+	SDL_SysWMinfo SysInfo;
+	HWND WindowHandle;
+	HICON hIconSmall;
+	HICON hIconBig;
+#elif defined(LIN32) || defined(LIN64)
+	SDL_Surface *icon;
+#endif
 	int status;
 	if (SDL_Init(SDL_INIT_VIDEO)<0)
 	{
 		fprintf(stderr, "Initializing SDL: %s\n", SDL_GetError());
 		return 0;
 	}
+	
+#ifdef WIN32
+	SDL_VERSION(&SysInfo.version);
+	if(SDL_GetWMInfo(&SysInfo) <= 0) {
+	    printf("%s : %d\n", SDL_GetError(), SysInfo.window);
+	    exit(-1);
+	}
+	WindowHandle = SysInfo.window;
+	hIconSmall = (HICON)LoadImage(&__ImageBase, MAKEINTRESOURCE(101), IMAGE_ICON, 16, 16, LR_SHARED);
+	hIconBig = (HICON)LoadImage(&__ImageBase, MAKEINTRESOURCE(101), IMAGE_ICON, 32, 32, LR_SHARED);
+	SendMessage(WindowHandle, WM_SETICON, ICON_SMALL, (LPARAM)hIconSmall);
+	SendMessage(WindowHandle, WM_SETICON, ICON_BIG, (LPARAM)hIconBig);
+#elif defined(LIN32) || defined(LIN64)
+	icon = SDL_CreateRGBSurfaceFrom(app_icon, 16, 16, 32, 64, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+	SDL_WM_SetIcon(icon, NULL);
+#endif
+	SDL_WM_SetCaption("The Powder Toy", "Powder Toy");
+	
 	atexit(SDL_Quit);
 #if defined(OGLR)
 	sdl_scrn=SDL_SetVideoMode(XRES*sdl_scale + BARSIZE*sdl_scale,YRES*sdl_scale + MENUSIZE*sdl_scale,32,SDL_OPENGL);
@@ -3949,8 +3993,6 @@ int sdl_open(void)
 		fprintf(stderr, "Creating window: %s\n", SDL_GetError());
 		return 0;
 	}
-	SDL_WM_SetCaption("The Powder Toy", "Powder Toy");
-	sdl_seticon();
 	SDL_EnableUNICODE(1);
 	//SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 #if (defined(LIN32) || defined(LIN64)) && defined(SDL_VIDEO_DRIVER_X11)
