@@ -102,8 +102,14 @@ scripts - enable scripts to be run from old console
 History:
 
 ---------------------------------------------------------------------------
-
-*  Version 73.0
+* Version 74
+      o Fixes for Triangle brush and minor electron bug
+      o Debug lines for WiFi, Portal and Soap
+      o Fusion for H2 at high temperature+high pressure
+      o Ambient heat and Newtonian Gravity in Quick Options menu.
+      o Smudge tool
+      o Speed improvements for particle drawing
+* Version 73.0
       o New elements: FRAY - Similar to ARAY but applies force, RPEL - Attract and repel particles
       o DEUT can be compressed by gravitational fields
       o Fix for "bumpy" streams of photons coming from PCLN
