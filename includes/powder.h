@@ -202,6 +202,7 @@
 #define PT_IGNT 140
 #define PT_BOYL 141
 #define PT_GEL 142
+#define PT_TRON 143
 
 #define OLD_PT_WIND 147
 #define PT_H2   148
@@ -324,6 +325,7 @@ int graphics_WIRE(GRAPHICS_FUNC_ARGS);
 int graphics_ACEL(GRAPHICS_FUNC_ARGS);
 int graphics_DCEL(GRAPHICS_FUNC_ARGS);
 int graphics_GEL(GRAPHICS_FUNC_ARGS);
+int graphics_TRON(GRAPHICS_FUNC_ARGS);
 
 #define UPDATE_FUNC_ARGS int i, int x, int y, int surround_space, int nt
 // to call another update function with same arguments:
@@ -441,6 +443,7 @@ int update_BANG(UPDATE_FUNC_ARGS);
 int update_IGNT(UPDATE_FUNC_ARGS);
 int update_FRAY(UPDATE_FUNC_ARGS);
 int update_REPL(UPDATE_FUNC_ARGS);
+int update_TRON(UPDATE_FUNC_ARGS);
 
 int update_MISC(UPDATE_FUNC_ARGS);
 int update_legacy_PYRO(UPDATE_FUNC_ARGS);
