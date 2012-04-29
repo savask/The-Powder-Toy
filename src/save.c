@@ -707,7 +707,7 @@ void *build_save_OPS(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h
 	signsCount = 0;
 	for(i = 0; i < MAXSIGNS; i++)
 	{
-		if(signs[i].text[0] && signs[i].x>=fullX && signs[i].x<=fullX+fullW && signs[i].y>=fullY && signs[i].y<=fullY+fullH)
+		if(signs[i].text[0] && signs[i].x>=orig_x0 && signs[i].x<=orig_x0+orig_w && signs[i].y>=orig_y0 && signs[i].y<=orig_y0+orig_h)
 		{
 			signsCount++;
 		}
@@ -717,7 +717,7 @@ void *build_save_OPS(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h
 		bson_append_start_array(&b, "signs");
 		for(i = 0; i < MAXSIGNS; i++)
 		{
-			if(signs[i].text[0] && signs[i].x>=fullX && signs[i].x<=fullX+fullW && signs[i].y>=fullY && signs[i].y<=fullY+fullH)
+			if(signs[i].text[0] && signs[i].x>=orig_x0 && signs[i].x<=orig_x0+orig_w && signs[i].y>=orig_y0 && signs[i].y<=orig_y0+orig_h)
 			{
 				bson_append_start_object(&b, "sign");
 				bson_append_string(&b, "text", signs[i].text);
@@ -1141,7 +1141,7 @@ int parse_save_OPS(void *save, int size, int replace, int x0, int y0, unsigned c
 					}
 					if(partsData[i] >= PT_NUM)
 						partsData[i] = PT_DMND;	//Replace all invalid elements with diamond
-					if(pmap[y][x])
+					if(pmap[y][x] && posCount==0) // Check posCount to make sure an existing particle is not replaced twice if two particles are saved in that position
 					{
 						//Replace existing particle or allocated block
 						newIndex = pmap[y][x]>>8;
@@ -1283,6 +1283,10 @@ int parse_save_OPS(void *save, int size, int replace, int x0, int y0, unsigned c
 							fighcount++;
 							STKM_init_legs(&(fighters[fcount]), newIndex);
 						}
+					}
+					else if (partsptr[newIndex].type == PT_SOAP)
+					{
+						partsptr[newIndex].ctype = 0;
 					}
 					if (!ptypes[partsptr[newIndex].type].enabled)
 						partsptr[newIndex].type = PT_NONE;
@@ -1580,7 +1584,7 @@ void *build_save_PSv(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h
 	for (j=0; j<w*h; j++)
 	{
 		i = m[j];
-		if (i && (parts[i-1].type==PT_PBCN)) {
+		if (i && (parts[i-1].type==PT_PBCN || parts[i-1].type==PT_TRON)) {
 			//Save tmp2
 			d[p++] = parts[i-1].tmp2;
 		}
@@ -1638,14 +1642,14 @@ void *build_save_PSv(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h
 	j = 0;
 	for (i=0; i<MAXSIGNS; i++)
 		if (signs[i].text[0] &&
-		        signs[i].x>=x0 && signs[i].x<x0+w &&
-		        signs[i].y>=y0 && signs[i].y<y0+h)
+		        signs[i].x>=orig_x0 && signs[i].x<orig_x0+orig_w &&
+		        signs[i].y>=orig_y0 && signs[i].y<orig_y0+orig_h)
 			j++;
 	d[p++] = j;
 	for (i=0; i<MAXSIGNS; i++)
 		if (signs[i].text[0] &&
-		        signs[i].x>=x0 && signs[i].x<x0+w &&
-		        signs[i].y>=y0 && signs[i].y<y0+h)
+		        signs[i].x>=orig_x0 && signs[i].x<orig_x0+orig_w &&
+		        signs[i].y>=orig_y0 && signs[i].y<orig_y0+orig_h)
 		{
 			d[p++] = (signs[i].x-x0);
 			d[p++] = (signs[i].x-x0)>>8;
@@ -1963,7 +1967,7 @@ int parse_save_PSv(void *save, int size, int replace, int x0, int y0, unsigned c
 		{
 			i = m[j];
 			ty = d[pty+j];
-			if (i && ty==PT_PBCN)
+			if (i && (ty==PT_PBCN || (ty==PT_TRON && ver>=77)))
 			{
 				if (p >= size)
 					goto corrupt;

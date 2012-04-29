@@ -657,6 +657,7 @@ int main(int argc, char *argv[])
 	
 	colour_mode = COLOUR_DEFAULT;
 	init_display_modes();
+	TRON_init_graphics();
 
 	sys_pause = 1;
 	parts = calloc(sizeof(particle), NPART);
@@ -806,6 +807,7 @@ int main(int argc, char *argv[])
 	
 	colour_mode = COLOUR_DEFAULT;
 	init_display_modes();
+	TRON_init_graphics();
 
 	//fbi_img = render_packed_rgb(fbi, FBI_W, FBI_H, FBI_CMP);
 
@@ -2303,7 +2305,7 @@ int main(int argc, char *argv[])
 							}
 				}
 
-				if (c==WL_SIGN+100)
+				if (c==WL_SIGN+100 || MSIGN!=-1) // if sign tool is selected or a sign is being moved
 				{
 					if (!bq)
 						add_sign_ui(vid_buf, x, y);
