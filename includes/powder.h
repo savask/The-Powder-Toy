@@ -219,6 +219,7 @@
 #define PT_BOYL 141
 #define PT_GEL 142
 #define PT_TRON 143
+#define PT_TTAN	144
 
 #define OLD_PT_WIND 147
 #define PT_H2   148
@@ -282,6 +283,7 @@ struct particle
 	int type;
 	int life, ctype;
 	float x, y, vx, vy;
+	float lastX, lastY;
 	float temp;
 	float pavg[2];
 	int flags;
@@ -465,6 +467,7 @@ int update_IGNT(UPDATE_FUNC_ARGS);
 int update_FRAY(UPDATE_FUNC_ARGS);
 int update_REPL(UPDATE_FUNC_ARGS);
 int update_TRON(UPDATE_FUNC_ARGS);
+int update_TTAN(UPDATE_FUNC_ARGS);
 
 int update_MISC(UPDATE_FUNC_ARGS);
 int update_legacy_PYRO(UPDATE_FUNC_ARGS);
