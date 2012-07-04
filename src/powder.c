@@ -29,6 +29,7 @@
 int wire_placed = 0;
 
 int lighting_recreate = 0;
+int force_stacking_check = 0;//whether to force a check for excessively stacked particles
 
 playerst player;
 playerst player2;
@@ -51,8 +52,31 @@ unsigned char cb_emap[YRES/CELL][XRES/CELL];
 int pfree;
 
 unsigned pmap[YRES][XRES];
+int pmap_count[YRES][XRES];
 unsigned cb_pmap[YRES][XRES];
 unsigned photons[YRES][XRES];
+
+void get_gravity_field(int x, int y, float particleGrav, float newtonGrav, float *pGravX, float *pGravY)
+{
+	*pGravX = newtonGrav*gravx[(y/CELL)*(XRES/CELL)+(x/CELL)];
+	*pGravY = newtonGrav*gravy[(y/CELL)*(XRES/CELL)+(x/CELL)];
+	switch (gravityMode)
+	{
+		default:
+		case 0: //normal, vertical gravity
+			*pGravY += particleGrav;
+			break;
+		case 1: //no gravity
+			break;
+		case 2: //radial gravity
+			if (x-XCNTR != 0 || y-YCNTR != 0)
+			{
+				float pGravMult = particleGrav/sqrtf((x-XCNTR)*(x-XCNTR) + (y-YCNTR)*(y-YCNTR));
+				*pGravX -= pGravMult * (float)(x - XCNTR);
+				*pGravY -= pGravMult * (float)(y - YCNTR);
+			}
+	}
+}
 
 static int pn_junction_sprk(int x, int y, int pt)
 {
@@ -93,7 +117,7 @@ void init_can_move()
 	//  1 = Swap
 	//  2 = Both particles occupy the same space.
 	//  3 = Varies, go run some extra checks
-	int t, rt;
+	int t, rt, stkm_move;
 	for (rt=0;rt<PT_NUM;rt++)
 		can_move[0][rt] = 0; // particles that don't exist shouldn't move...
 	for (t=1;t<PT_NUM;t++)
@@ -132,27 +156,30 @@ void init_can_move()
 	{
 		//spark shouldn't move
 		can_move[PT_SPRK][t] = 0;
-		//all stickman collisions are done in stickman update function
-		can_move[PT_STKM][t] = 2;
-		can_move[PT_STKM2][t] = 2;
-		can_move[PT_FIGH][t] = 2;
+		stkm_move = 0;
+		if (ptypes[t].properties & (TYPE_LIQUID | TYPE_GAS))
+			stkm_move = 2;
+		if (!t || t==PT_PRTO || t==PT_SPAWN || t==PT_SPAWN2)
+			stkm_move = 2;
+		can_move[PT_STKM][t] = stkm_move;
+		can_move[PT_STKM2][t] = stkm_move;
+		can_move[PT_FIGH][t] = stkm_move;
 	}
 	for (t=0;t<PT_NUM;t++)
 	{
 		// make them eat things
-		can_move[t][PT_VOID] = 1;
 		can_move[t][PT_BHOL] = 1;
 		can_move[t][PT_NBHL] = 1;
-		//all stickman collisions are done in stickman update function
-		can_move[t][PT_STKM] = 2;
-		can_move[t][PT_STKM2] = 2;
-		can_move[PT_FIGH][t] = 2;
+		can_move[t][PT_STKM] = 0;
+		can_move[t][PT_STKM2] = 0;
+		can_move[t][PT_FIGH] = 0;
 		//INVIS behaviour varies with pressure
 		can_move[t][PT_INVIS] = 3;
 		//stop CNCT being displaced by other particles
 		can_move[t][PT_CNCT] = 0;
-		//Powered void behaviour varies on powered state
+		//void behaviour varies with powered state and ctype
 		can_move[t][PT_PVOD] = 3;
+		can_move[t][PT_VOID] = 3;
 	}
 	for (t=0;t<PT_NUM;t++)
 	{
@@ -163,6 +190,8 @@ void init_can_move()
 			can_move[PT_PHOT][t] = 2;
 	}
 	can_move[PT_ELEC][PT_LCRY] = 2;
+	can_move[PT_ELEC][PT_EXOT] = 2;
+	can_move[PT_NEUT][PT_EXOT] = 2;
 	can_move[PT_PHOT][PT_LCRY] = 3;//varies according to LCRY life
 	
 	can_move[PT_PHOT][PT_BIZR] = 2;
@@ -177,6 +206,7 @@ void init_can_move()
 	can_move[PT_ANAR][PT_WHOL] = 1;
 	can_move[PT_ANAR][PT_NWHL] = 1;
 	can_move[PT_THDR][PT_THDR] = 2;
+	can_move[PT_EMBR][PT_EMBR] = 2;
 }
 
 /*
@@ -212,8 +242,21 @@ int eval_move(int pt, int nx, int ny, unsigned *rr)
 		}
 		if ((r&0xFF)==PT_PVOD)
 		{
-			if (parts[r>>8].life == 10) result = 1;
+			if (parts[r>>8].life == 10)
+			{
+				if(!parts[r>>8].ctype || (parts[r>>8].ctype==pt)!=(parts[r>>8].tmp&1))
+					result = 1;
+				else
+					result = 0;
+			}
 			else result = 0;
+		}
+		if ((r&0xFF)==PT_VOID)
+		{
+			if(!parts[r>>8].ctype || (parts[r>>8].ctype==pt)!=(parts[r>>8].tmp&1))
+				result = 1;
+			else
+				result = 0;
 		}
 	}
 	if (bmap[ny/CELL][nx/CELL])
@@ -230,7 +273,7 @@ int eval_move(int pt, int nx, int ny, unsigned *rr)
 			return 0;
 		if (bmap[ny/CELL][nx/CELL]==WL_EWALL && !emap[ny/CELL][nx/CELL])
 			return 0;
-		if (bmap[ny/CELL][nx/CELL]==WL_EHOLE && !emap[ny/CELL][nx/CELL])
+		if (bmap[ny/CELL][nx/CELL]==WL_EHOLE && !emap[ny/CELL][nx/CELL] && !(ptypes[pt].properties&TYPE_SOLID) && !(ptypes[r&0xFF].properties&TYPE_SOLID))
 			return 2;
 	}
 	return result;
@@ -246,9 +289,6 @@ int try_move(int i, int x, int y, int nx, int ny)
 		return 1;
 
 	e = eval_move(parts[i].type, nx, ny, &r);
-
-	if ((r&0xFF)==PT_BOMB && parts[i].type==PT_BOMB && parts[i].tmp == 1)
-		e = 2;
 
 	/* half-silvered mirror */
 	if (!e && parts[i].type==PT_PHOT &&
@@ -344,8 +384,8 @@ int try_move(int i, int x, int y, int nx, int ny)
 	}
 	if ((r&0xFF)==PT_VOID || (r&0xFF)==PT_PVOD) //this is where void eats particles
 	{
-		if(!parts[r>>8].ctype || (parts[r>>8].ctype==parts[i].type)!=(parts[r>>8].tmp&1))
-			kill_part(i);
+		//void ctype already checked in eval_move
+		kill_part(i);
 		return 0;
 	}
 	if ((r&0xFF)==PT_BHOL || (r&0xFF)==PT_NBHL) //this is where blackhole eats particles
@@ -793,6 +833,11 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			return -1;
 		if (parts[pmap[y][x]>>8].life!=0)
 			return -1;
+		if (p==-2 && (pmap[y][x]&0xFF)==PT_INST)
+		{
+			flood_INST(x, y, PT_SPRK, PT_INST);
+			return pmap[y][x]>>8;
+		}
 		parts[pmap[y][x]>>8].type = PT_SPRK;
 		parts[pmap[y][x]>>8].life = 4;
 		parts[pmap[y][x]>>8].ctype = pmap[y][x]&0xFF;
@@ -875,6 +920,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 	if (i>parts_lastActiveIndex) parts_lastActiveIndex = i;
 
 	parts[i].dcolour = 0;
+	parts[i].flags = 0;
 	if (t==PT_GLAS)
 	{
 		parts[i].pavg[1] = pv[y/CELL][x/CELL];
@@ -914,24 +960,6 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 	}*/
 	switch (t)
 	{
-		case PT_LIGH:
-			if (p==-2)
-			{
-				switch (gravityMode)
-				{
-					default:
-					case 0:
-						parts[i].tmp= 270+rand()%40-20;
-						break;
-					case 1:
-						parts[i].tmp = rand()%360;
-						break;
-					case 2:
-						parts[i].tmp = atan2(x-XCNTR, y-YCNTR)*(180.0f/M_PI)+90;
-				}
-				parts[i].tmp2 = 4;
-			}
-			break;
 		case PT_SOAP:
 			parts[i].tmp = -1;
 			parts[i].tmp2 = -1;
@@ -1022,6 +1050,13 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 		case PT_MORT:
 			parts[i].vx = 2;
 			break;
+		case PT_EXOT:
+			parts[i].life = 1000;
+			parts[i].tmp = 244;
+			break;
+		case PT_EMBR:
+			parts[i].life = 50;
+			break;
 		case PT_STKM:
 			if (player.spwn==0)
 			{
@@ -1044,7 +1079,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			{
 				return -1;
 			}
-			create_part(-1,x,y,PT_SPAWN);
+			create_part(-3,x,y,PT_SPAWN);
 			ISSPAWN1 = 1;
 			break;
 		case PT_STKM2:
@@ -1069,7 +1104,7 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 			{
 				return -1;
 			}
-			create_part(-1,x,y,PT_SPAWN2);
+			create_part(-3,x,y,PT_SPAWN2);
 			ISSPAWN2 = 1;
 			break;
 		case PT_BIZR: case PT_BIZRG: case PT_BIZRS:
@@ -1134,6 +1169,27 @@ inline int create_part(int p, int x, int y, int tv)//the function for creating a
 				parts[i].tmp = 1|(randomdir<<5)|(randhue<<7);//set as a head and a direction
 				parts[i].tmp2 = 4;//tail
 				parts[i].life = 5;
+			}
+			if (t==PT_LIGH)
+			{
+				float gx, gy, gsize;
+				if (p!=-2)
+				{
+					parts[i].life=30;
+					parts[i].temp=parts[i].life*150.0f; // temperature of the lighting shows the power of the lighting
+				}
+				get_gravity_field(x, y, 1.0f, 1.0f, &gx, &gy);
+				gsize = gx*gx+gy*gy;
+				if (gsize<0.0016f)
+				{
+					float angle = (rand()%6284)*0.001f;//(in radians, between 0 and 2*pi)
+					gsize = sqrtf(gsize);
+					// randomness in weak gravity fields (more randomness with weaker fields)
+					gx += cosf(angle)*(0.04f-gsize);
+					gy += sinf(angle)*(0.04f-gsize);
+				}
+				parts[i].tmp = (((int)(atan2f(-gy, gx)*(180.0f/M_PI)))+rand()%40-20+360)%360;
+				parts[i].tmp2 = 4;
 			}
 	}
 	//and finally set the pmap/photon maps to the newly created particle
@@ -1486,6 +1542,7 @@ void update_particles_i(pixel *vid, int start, int inc)
 	int lighting_ok=1;
 	unsigned int elem_properties;
 	float pGravX, pGravY, pGravD;
+	int excessive_stacking_found = 0;
 
 	if (sys_pause&&lighting_recreate>0)
     {
@@ -1511,6 +1568,68 @@ void update_particles_i(pixel *vid, int start, int inc)
 	if (sys_pause&&!framerender)//do nothing if paused
 		return;
 		
+	if (force_stacking_check || (rand()%10)==0)
+	{
+		force_stacking_check = 0;
+		excessive_stacking_found = 0;
+		for (y=0; y<YRES; y++)
+		{
+			for (x=0; x<XRES; x++)
+			{
+				// Use a threshold, since some particle stacking can be normal (e.g. BIZR + FILT)
+				// Setting pmap_count[y][x] > NPART means BHOL will form in that spot
+				if (pmap_count[y][x]>5)
+				{
+					if (bmap[y/CELL][x/CELL]==WL_EHOLE)
+					{
+						// Allow more stacking in E-hole
+						if (pmap_count[y][x]>1500)
+						{
+							pmap_count[y][x] = pmap_count[y][x] + NPART;
+							excessive_stacking_found = 1;
+						}
+					}
+					// Random chance to turn into BHOL that increases with the amount of stacking, up to a threshold where it is certain to turn into BHOL
+					else if (pmap_count[y][x]>1500 || (rand()%1600)<=(pmap_count[y][x]+100))
+					{
+						pmap_count[y][x] = pmap_count[y][x] + NPART;
+						excessive_stacking_found = 1;
+					}
+				}
+			}
+		}
+		if (excessive_stacking_found)
+		{
+			for (i=0; i<=parts_lastActiveIndex; i++)
+			{
+				if (parts[i].type)
+				{
+					t = parts[i].type;
+					x = (int)(parts[i].x+0.5f);
+					y = (int)(parts[i].y+0.5f);
+					if (x>=0 && y>=0 && x<XRES && y<YRES && !(ptypes[t].properties&TYPE_ENERGY))
+					{
+						if (pmap_count[y][x]>=NPART)
+						{
+							if (pmap_count[y][x]>NPART)
+							{
+								create_part(i, x, y, PT_NBHL);
+								parts[i].temp = MAX_TEMP;
+								parts[i].tmp = pmap_count[y][x]-NPART;//strength of grav field
+								if (parts[i].tmp>51200) parts[i].tmp = 51200;
+								pmap_count[y][x] = NPART;
+							}
+							else
+							{
+								kill_part(i);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
 	if (ISGRAV==1)//crappy grav color handling, i will change this someday
 	{
 		ISGRAV = 0;
@@ -1900,16 +2019,16 @@ void update_particles_i(pixel *vid, int start, int inc)
 #endif
 			}
 
-			j = surround_space = nt = 0;//if nt is 1 after this, then there is a particle around the current particle, that is NOT the current particle's type, for water movement.
+			j = surround_space = nt = 0;//if nt is greater than 1 after this, then there is a particle around the current particle, that is NOT the current particle's type, for water movement.
 			for (nx=-1; nx<2; nx++)
 				for (ny=-1; ny<2; ny++) {
 					if (nx||ny) {
 						surround[j] = r = pmap[y+ny][x+nx];
 						j++;
 						if (!(r&0xFF))
-							surround_space = 1;//there is empty space
+							surround_space++;//there is empty space
 						if ((r&0xFF)!=t)
-							nt = 1;//there is nothing or a different particle
+							nt++;//there is nothing or a different particle
 					}
 				}
 
@@ -2384,7 +2503,31 @@ killed:
 			stagnant = parts[i].flags & FLAG_STAGNANT;
 			parts[i].flags &= ~FLAG_STAGNANT;
 
-			if (ptypes[t].properties & TYPE_ENERGY) {
+			if (t==PT_STKM || t==PT_STKM2 || t==PT_FIGH)
+			{
+				int nx, ny;
+				//head movement, let head pass through anything
+				parts[i].x += parts[i].vx;
+				parts[i].y += parts[i].vy;
+				nx = (int)((float)parts[i].x+0.5f);
+				ny = (int)((float)parts[i].y+0.5f);
+				if (ny!=y || nx!=x)
+				{
+					if ((pmap[y][x]>>8)==i) pmap[y][x] = 0;
+					else if ((photons[y][x]>>8)==i) photons[y][x] = 0;
+					if (nx<CELL || nx>=XRES-CELL || ny<CELL || ny>=YRES-CELL)
+					{
+						kill_part(i);
+						continue;
+					}
+					if (ptypes[t].properties & TYPE_ENERGY)
+						photons[ny][nx] = t|(i<<8);
+					else if (t)
+						pmap[ny][nx] = t|(i<<8);
+				}
+			}
+			else if (ptypes[t].properties & TYPE_ENERGY)
+			{
 				if (t == PT_PHOT) {
 					if (parts[i].flags&FLAG_SKIPMOVE)
 					{
@@ -2774,6 +2917,7 @@ void update_particles(pixel *vid)//doesn't update the particles themselves, but 
 #endif
 
 	memset(pmap, 0, sizeof(pmap));
+	memset(pmap_count, 0, sizeof(pmap_count));
 	memset(photons, 0, sizeof(photons));
 	NUM_PARTS = 0;
 	for (i=0; i<=parts_lastActiveIndex; i++)//the particle loop that resets the pmap/photon maps every frame, to update them.
@@ -2788,7 +2932,16 @@ void update_particles(pixel *vid)//doesn't update the particles themselves, but 
 				if (ptypes[t].properties & TYPE_ENERGY)
 					photons[y][x] = t|(i<<8);
 				else
-					pmap[y][x] = t|(i<<8);
+				{
+					// Particles are sometimes allowed to go inside INVS and FILT
+					// To make particles collide correctly when inside these elements, these elements must not overwrite an existing pmap entry from particles inside them
+					if (!pmap[y][x] || (t!=PT_INVIS && t!= PT_FILT))
+						pmap[y][x] = t|(i<<8);
+					// Count number of particles at each location, for excess stacking check
+					// (there are a few exceptions, including energy particles - currently no limit on stacking those)
+					if (t!=PT_THDR && t!=PT_EMBR && t!=PT_FIGH && t!=PT_PLSM)
+						pmap_count[y][x]++;
+				}
 			}
 			lastPartUsed = i;
 			NUM_PARTS ++;
@@ -2929,21 +3082,168 @@ int flood_prop(int x, int y, size_t propoffset, void * propvalue, int proptype)
 
 #define PMAP_CMP_CONDUCTIVE(pmap, t) (((pmap)&0xFF)==(t) || (((pmap)&0xFF)==PT_SPRK && parts[(pmap)>>8].ctype==(t)))
 
+int flood_INST(int x, int y, int fullc, int cm)
+{
+	int c = fullc&0xFF;
+	int x1, x2, dy = (c<PT_NUM)?1:CELL;
+	int co = c;
+	int coord_stack_limit = XRES*YRES;
+	unsigned short (*coord_stack)[2];
+	int coord_stack_size = 0;
+	int created_something = 0;
+
+	if (c>=PT_NUM)
+		return 0;
+
+	if (cm==-1)
+	{
+		if (c==0)
+		{
+			cm = pmap[y][x]&0xFF;
+			if (!cm)
+				return 0;
+		}
+		else
+			cm = 0;
+	}
+
+	if ((pmap[y][x]&0xFF)!=cm || parts[pmap[y][x]>>8].life!=0)
+		return 1;
+
+	coord_stack = malloc(sizeof(unsigned short)*2*coord_stack_limit);
+	coord_stack[coord_stack_size][0] = x;
+	coord_stack[coord_stack_size][1] = y;
+	coord_stack_size++;
+
+	do
+	{
+		coord_stack_size--;
+		x = coord_stack[coord_stack_size][0];
+		y = coord_stack[coord_stack_size][1];
+		x1 = x2 = x;
+		// go left as far as possible
+		while (x1>=CELL)
+		{
+			if ((pmap[y][x1-1]&0xFF)!=cm || parts[pmap[y][x1-1]>>8].life!=0)
+			{
+				break;
+			}
+			x1--;
+		}
+		// go right as far as possible
+		while (x2<XRES-CELL)
+		{
+			if ((pmap[y][x2+1]&0xFF)!=cm || parts[pmap[y][x2+1]>>8].life!=0)
+			{
+				break;
+			}
+			x2++;
+		}
+		// fill span
+		for (x=x1; x<=x2; x++)
+		{
+			if (create_part(-1, x, y, fullc)>=0)
+				created_something = 1;
+		}
+
+		// add vertically adjacent pixels to stack
+		// (wire crossing for INST)
+		if (y>=CELL+1 && x1==x2 &&
+				PMAP_CMP_CONDUCTIVE(pmap[y-1][x1-1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y-1][x1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y-1][x1+1], cm) &&
+				!PMAP_CMP_CONDUCTIVE(pmap[y-2][x1-1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y-2][x1], cm) && !PMAP_CMP_CONDUCTIVE(pmap[y-2][x1+1], cm))
+		{
+			// travelling vertically up, skipping a horizontal line
+			if ((pmap[y-2][x1]&0xFF)==cm && !parts[pmap[y-2][x1]>>8].life)
+			{
+				coord_stack[coord_stack_size][0] = x1;
+				coord_stack[coord_stack_size][1] = y-2;
+				coord_stack_size++;
+				if (coord_stack_size>=coord_stack_limit)
+				{
+					free(coord_stack);
+					return -1;
+				}
+			}
+		}
+		else if (y>=CELL+1)
+		{
+			for (x=x1; x<=x2; x++)
+			{
+				if ((pmap[y-1][x]&0xFF)==cm && !parts[pmap[y-1][x]>>8].life)
+				{
+					if (x==x1 || x==x2 || y>=YRES-CELL-1 || !PMAP_CMP_CONDUCTIVE(pmap[y+1][x], cm))
+					{
+						// if at the end of a horizontal section, or if it's a T junction
+						coord_stack[coord_stack_size][0] = x;
+						coord_stack[coord_stack_size][1] = y-1;
+						coord_stack_size++;
+						if (coord_stack_size>=coord_stack_limit)
+						{
+							free(coord_stack);
+							return -1;
+						}
+					}
+				}
+			}
+		}
+
+		if (y<YRES-CELL-1 && x1==x2 &&
+				PMAP_CMP_CONDUCTIVE(pmap[y+1][x1-1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y+1][x1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y+1][x1+1], cm) &&
+				!PMAP_CMP_CONDUCTIVE(pmap[y+2][x1-1], cm) && PMAP_CMP_CONDUCTIVE(pmap[y+2][x1], cm) && !PMAP_CMP_CONDUCTIVE(pmap[y+2][x1+1], cm))
+		{
+			// travelling vertically down, skipping a horizontal line
+			if ((pmap[y+2][x1]&0xFF)==cm && !parts[pmap[y+2][x1]>>8].life)
+			{
+				coord_stack[coord_stack_size][0] = x1;
+				coord_stack[coord_stack_size][1] = y+2;
+				coord_stack_size++;
+				if (coord_stack_size>=coord_stack_limit)
+				{
+					free(coord_stack);
+					return -1;
+				}
+			}
+		}
+		else if (y<YRES-CELL-1)
+		{
+			for (x=x1; x<=x2; x++)
+			{
+				if ((pmap[y+1][x]&0xFF)==cm && !parts[pmap[y+1][x]>>8].life)
+				{
+					if (x==x1 || x==x2 || y<0 || !PMAP_CMP_CONDUCTIVE(pmap[y-1][x], cm))
+					{
+						// if at the end of a horizontal section, or if it's a T junction
+						coord_stack[coord_stack_size][0] = x;
+						coord_stack[coord_stack_size][1] = y+1;
+						coord_stack_size++;
+						if (coord_stack_size>=coord_stack_limit)
+						{
+							free(coord_stack);
+							return -1;
+						}
+					}
+
+				}
+			}
+		}
+	} while (coord_stack_size>0);
+	free(coord_stack);
+	return created_something;
+}
+
+
 int flood_parts(int x, int y, int fullc, int cm, int bm, int flags)
 {
 	int c = fullc&0xFF;
 	int x1, x2, dy = (c<PT_NUM)?1:CELL;
 	int co = c;
 	int coord_stack_limit = XRES*YRES;
-	unsigned short (*coord_stack)[2] = malloc(sizeof(unsigned short)*2*coord_stack_limit);
+	unsigned short (*coord_stack)[2];
 	int coord_stack_size = 0;
 	int created_something = 0;
 
 	if (c==SPC_PROP)
 		return 0;
-	if (cm==PT_INST&&co==PT_SPRK)
-		if ((pmap[y][x]&0xFF)==PT_SPRK)
-			return 0;
 	if (cm==-1)
 	{
 		if (c==0)
@@ -2974,6 +3274,7 @@ int flood_parts(int x, int y, int fullc, int cm, int bm, int flags)
 	if (((pmap[y][x]&0xFF)!=cm || bmap[y/CELL][x/CELL]!=bm )||( (flags&BRUSH_SPECIFIC_DELETE) && cm!=SLALT))
 		return 1;
 
+	coord_stack = malloc(sizeof(unsigned short)*2*coord_stack_limit);
 	coord_stack[coord_stack_size][0] = x;
 	coord_stack[coord_stack_size][1] = y;
 	coord_stack_size++;
@@ -3005,112 +3306,37 @@ int flood_parts(int x, int y, int fullc, int cm, int bm, int flags)
 		// fill span
 		for (x=x1; x<=x2; x++)
 		{
-			if (cm==PT_INST&&co==PT_SPRK)
-			{
-				if (create_part(-1, x, y, fullc)>=0)
-					created_something = 1;
-			}
-			else
-			{
-				if (create_parts(x, y, 0, 0, fullc, flags, 1))
-					created_something = 1;
-			}
+			if (create_parts(x, y, 0, 0, fullc, flags, 1))
+				created_something = 1;
 		}
 
 		// add vertically adjacent pixels to stack
-		if (cm==PT_INST&&co==PT_SPRK)
-		{
-			//wire crossing for INST
-			if (y>=CELL+1 && x1==x2 &&
-					PMAP_CMP_CONDUCTIVE(pmap[y-1][x1-1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y-1][x1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y-1][x1+1], PT_INST) &&
-					!PMAP_CMP_CONDUCTIVE(pmap[y-2][x1-1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y-2][x1], PT_INST) && !PMAP_CMP_CONDUCTIVE(pmap[y-2][x1+1], PT_INST))
-			{
-				// travelling vertically up, skipping a horizontal line
-				if ((pmap[y-2][x1]&0xFF)==PT_INST)
+		if (y>=CELL+dy)
+			for (x=x1; x<=x2; x++)
+				if ((pmap[y-dy][x]&0xFF)==cm && bmap[(y-dy)/CELL][x/CELL]==bm)
 				{
-					coord_stack[coord_stack_size][0] = x1;
-					coord_stack[coord_stack_size][1] = y-2;
+					coord_stack[coord_stack_size][0] = x;
+					coord_stack[coord_stack_size][1] = y-dy;
 					coord_stack_size++;
 					if (coord_stack_size>=coord_stack_limit)
-						return -1;
-				}
-			}
-			else if (y>=CELL+1)
-			{
-				for (x=x1; x<=x2; x++)
-				{
-					if ((pmap[y-1][x]&0xFF)==PT_INST)
 					{
-						if (x==x1 || x==x2 || y>=YRES-CELL-1 || !PMAP_CMP_CONDUCTIVE(pmap[y+1][x], PT_INST))
-						{
-							// if at the end of a horizontal section, or if it's a T junction
-							coord_stack[coord_stack_size][0] = x;
-							coord_stack[coord_stack_size][1] = y-1;
-							coord_stack_size++;
-							if (coord_stack_size>=coord_stack_limit)
-								return -1;
-						}
+						free(coord_stack);
+						return -1;
 					}
 				}
-			}
-
-			if (y<YRES-CELL-1 && x1==x2 &&
-					PMAP_CMP_CONDUCTIVE(pmap[y+1][x1-1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y+1][x1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y+1][x1+1], PT_INST) &&
-					!PMAP_CMP_CONDUCTIVE(pmap[y+2][x1-1], PT_INST) && PMAP_CMP_CONDUCTIVE(pmap[y+2][x1], PT_INST) && !PMAP_CMP_CONDUCTIVE(pmap[y+2][x1+1], PT_INST))
-			{
-				// travelling vertically down, skipping a horizontal line
-				if ((pmap[y+2][x1]&0xFF)==PT_INST)
+		if (y<YRES-CELL-dy)
+			for (x=x1; x<=x2; x++)
+				if ((pmap[y+dy][x]&0xFF)==cm && bmap[(y+dy)/CELL][x/CELL]==bm)
 				{
-					coord_stack[coord_stack_size][0] = x1;
-					coord_stack[coord_stack_size][1] = y+2;
+					coord_stack[coord_stack_size][0] = x;
+					coord_stack[coord_stack_size][1] = y+dy;
 					coord_stack_size++;
 					if (coord_stack_size>=coord_stack_limit)
+					{
+						free(coord_stack);
 						return -1;
-				}
-			}
-			else if (y<YRES-CELL-1)
-			{
-				for (x=x1; x<=x2; x++)
-				{
-					if ((pmap[y+1][x]&0xFF)==PT_INST)
-					{
-						if (x==x1 || x==x2 || y<0 || !PMAP_CMP_CONDUCTIVE(pmap[y-1][x], PT_INST))
-						{
-							// if at the end of a horizontal section, or if it's a T junction
-							coord_stack[coord_stack_size][0] = x;
-							coord_stack[coord_stack_size][1] = y+1;
-							coord_stack_size++;
-							if (coord_stack_size>=coord_stack_limit)
-								return -1;
-						}
-
 					}
 				}
-			}
-		}
-		else
-		{
-			if (y>=CELL+dy)
-				for (x=x1; x<=x2; x++)
-					if ((pmap[y-dy][x]&0xFF)==cm && bmap[(y-dy)/CELL][x/CELL]==bm)
-					{
-						coord_stack[coord_stack_size][0] = x;
-						coord_stack[coord_stack_size][1] = y-dy;
-						coord_stack_size++;
-						if (coord_stack_size>=coord_stack_limit)
-							return -1;
-					}
-			if (y<YRES-CELL-dy)
-				for (x=x1; x<=x2; x++)
-					if ((pmap[y+dy][x]&0xFF)==cm && bmap[(y+dy)/CELL][x/CELL]==bm)
-					{
-						coord_stack[coord_stack_size][0] = x;
-						coord_stack[coord_stack_size][1] = y+dy;
-						coord_stack_size++;
-						if (coord_stack_size>=coord_stack_limit)
-							return -1;
-					}
-		}
 	} while (coord_stack_size>0);
 	free(coord_stack);
 	return created_something;

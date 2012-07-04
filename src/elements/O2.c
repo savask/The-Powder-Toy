@@ -44,19 +44,18 @@ int update_O2(UPDATE_FUNC_ARGS)
 
 				}
 	}
-	else if (parts[i].temp > 9973.15 && pv[y/CELL][x/CELL] > 250.0f && abs(gravx[(((y/sdl_scale)/CELL)*(XRES/CELL))+((x/sdl_scale)/CELL)]) + abs(gravy[(((y/sdl_scale)/CELL)*(XRES/CELL))+((x/sdl_scale)/CELL)]) > 20)
+	else if (parts[i].temp > 9973.15 && pv[y/CELL][x/CELL] > 250.0f && fabsf(gravx[((y/CELL)*(XRES/CELL))+(x/CELL)]) + fabsf(gravy[((y/CELL)*(XRES/CELL))+(x/CELL)]) > 20)
 	{
 		if (rand()%5 < 1)
 		{
 			int j;
-			part_change_type(i,x,y,PT_PLSM);
-			parts[i].life = rand()%150+50;
+			create_part(i,x,y,PT_BRMT);
+
 			j = create_part(-3,x+rand()%3-1,y+rand()%3-1,PT_NEUT); if (j != -1) parts[j].temp = 15000;
 			j = create_part(-3,x+rand()%3-1,y+rand()%3-1,PT_PHOT); if (j != -1) parts[j].temp = 15000;
-			j = create_part(-3,x+rand()%3-1,y+rand()%3-1,PT_BRMT); if (j != -1) parts[j].temp = 15000;
-			j = create_part(-3,x+rand()%3-1,y+rand()%3-1,PT_SING); if (j != -1) { parts[j].temp = 15000; parts[i].life = rand()%25+50; }
+			j = create_part(-3,x+rand()%3-1,y+rand()%3-1,PT_PLSM); if (j != -1) parts[j].temp = 15000;
 
-			parts[i].temp += 15000;
+			parts[i].temp = 15000;
 			pv[y/CELL][x/CELL] += 300;
 		}
 	}

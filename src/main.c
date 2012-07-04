@@ -1154,7 +1154,7 @@ int main(int argc, char *argv[])
 			{
 				char saveURIOpenString[512];
 				check_data = http_async_req_stop(http_session_check, &http_s_ret, NULL);
-				if (http_ret==200 && check_data)
+				if (http_s_ret==200 && check_data)
 				{
 					if (!strncmp(check_data, "EXPIRED", 7))
 					{
@@ -1734,6 +1734,8 @@ int main(int argc, char *argv[])
 						bmap[cby][cbx] = cb_bmap[cby][cbx];
 						emap[cby][cbx] = cb_emap[cby][cbx];
 					}
+
+				force_stacking_check = 1;//check for excessive stacking of particles next time update_particles is run
 			}
 		}
 #ifdef INTERNAL
@@ -2340,6 +2342,7 @@ int main(int argc, char *argv[])
 
 									buff[sldr-3] = '\0';
 									open_ui(vid_buf, buff, 0);
+									break;
 								}
 							}
 				}

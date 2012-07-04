@@ -210,7 +210,7 @@
 #define PT_QRTZ 132
 #define PT_PQRT 133
 #define PT_EMP 134
-#define PT_BREC 135
+#define PT_BREL 135
 #define PT_ELEC 136
 #define PT_ACEL 137
 #define PT_DCEL 138
@@ -220,8 +220,10 @@
 #define PT_GEL 142
 #define PT_TRON 143
 #define PT_TTAN	144
+#define PT_EXOT	145
 
 #define OLD_PT_WIND 147
+#define PT_EMBR 147
 #define PT_H2   148
 #define PT_SOAP 149
 #define PT_NBHL 150
@@ -274,8 +276,8 @@
 #define FLAG_SKIPMOVE	0x2 // skip movement for one frame, only implemented for PHOT
 #define FLAG_MOVABLE	0x4 // if can move
 
-#define GRAPHICS_FUNC_ARGS particle *cpart, int nx, int ny, int *pixel_mode, int* cola, int *colr, int *colg, int *colb, int *firea, int *firer, int *fireg, int *fireb, pixel *vid
-#define GRAPHICS_FUNC_SUBCALL_ARGS cpart, nx, ny, pixel_mode, cola, colr, colg, colb, firea, firer, fireg, fireb, vid
+#define GRAPHICS_FUNC_ARGS particle *cpart, int nx, int ny, int *pixel_mode, int* cola, int *colr, int *colg, int *colb, int *firea, int *firer, int *fireg, int *fireb
+#define GRAPHICS_FUNC_SUBCALL_ARGS cpart, nx, ny, pixel_mode, cola, colr, colg, colb, firea, firer, fireg, fireb
 
 
 struct particle
@@ -309,7 +311,6 @@ int graphics_CLST(GRAPHICS_FUNC_ARGS);
 int graphics_CBNW(GRAPHICS_FUNC_ARGS);
 int graphics_SPNG(GRAPHICS_FUNC_ARGS);
 int graphics_LIFE(GRAPHICS_FUNC_ARGS);
-int graphics_DUST(GRAPHICS_FUNC_ARGS);
 int graphics_GRAV(GRAPHICS_FUNC_ARGS);
 int graphics_WIFI(GRAPHICS_FUNC_ARGS);
 int graphics_PRTI(GRAPHICS_FUNC_ARGS);
@@ -350,7 +351,10 @@ int graphics_DCEL(GRAPHICS_FUNC_ARGS);
 int graphics_GEL(GRAPHICS_FUNC_ARGS);
 int graphics_TRON(GRAPHICS_FUNC_ARGS);
 int graphics_SOAP(GRAPHICS_FUNC_ARGS);
+int graphics_EXOT(GRAPHICS_FUNC_ARGS);
+int graphics_WARP(GRAPHICS_FUNC_ARGS);
 int graphics_stickmen(GRAPHICS_FUNC_ARGS);
+int graphics_EMBR(GRAPHICS_FUNC_ARGS);
 
 void TRON_init_graphics();
 
@@ -386,6 +390,7 @@ int update_CLNE(UPDATE_FUNC_ARGS);
 int update_COAL(UPDATE_FUNC_ARGS);
 int update_DEUT(UPDATE_FUNC_ARGS);
 int update_DSTW(UPDATE_FUNC_ARGS);
+int update_EMBR(UPDATE_FUNC_ARGS);
 int update_FOG(UPDATE_FUNC_ARGS);
 int update_FRZW(UPDATE_FUNC_ARGS);
 int update_FRZZ(UPDATE_FUNC_ARGS);
@@ -472,6 +477,8 @@ int update_FRAY(UPDATE_FUNC_ARGS);
 int update_REPL(UPDATE_FUNC_ARGS);
 int update_TRON(UPDATE_FUNC_ARGS);
 int update_TTAN(UPDATE_FUNC_ARGS);
+int update_BREL(UPDATE_FUNC_ARGS);
+int update_EXOT(UPDATE_FUNC_ARGS);
 
 int update_MISC(UPDATE_FUNC_ARGS);
 int update_legacy_PYRO(UPDATE_FUNC_ARGS);
@@ -755,6 +762,7 @@ extern int portal_rx[8];
 extern int portal_ry[8];
 
 extern int wire_placed;
+extern int force_stacking_check;
 
 extern playerst player;
 extern playerst player2;
@@ -797,6 +805,8 @@ void detach(int i);
 
 void part_change_type(int i, int x, int y, int t);
 
+void get_gravity_field(int x, int y, float particleGrav, float newtonGrav, float *pGravX, float *pGravY);
+
 int InCurrentBrush(int i, int j, int rx, int ry);
 
 int get_brush_flags();
@@ -828,6 +838,8 @@ void clear_area(int area_x, int area_y, int area_w, int area_h);
 void create_box(int x1, int y1, int x2, int y2, int c, int flags);
 
 int flood_parts(int x, int y, int c, int cm, int bm, int flags);
+
+int flood_INST(int x, int y, int fullc, int cm);
 
 int create_parts(int x, int y, int rx, int ry, int c, int flags, int fill);
 
