@@ -802,8 +802,8 @@ void *build_save_OPS(int *size, int orig_x0, int orig_y0, int orig_w, int orig_h
 				bson_append_finish_object(&b);
 			}
 		}
+		bson_append_finish_array(&b);
 	}
-	bson_append_finish_array(&b);
 	bson_finish(&b);
 	bson_print(&b);
 	
@@ -1807,7 +1807,7 @@ int parse_save_PSv(void *save, int size, int replace, int x0, int y0, unsigned c
 				//TODO: Possibly some server side translation
 				j = PT_DUST;//goto corrupt;
 			}
-			gol[x][y]=0;
+			gol[y][x]=0;
 			if (j)
 			{
 				if (pmap[y][x])

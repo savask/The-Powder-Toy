@@ -25,8 +25,8 @@
  
 //VersionInfoStart
 #define SAVE_VERSION 81
-#define MINOR_VERSION 1
-#define BUILD_NUM 183
+#define MINOR_VERSION 2
+#define BUILD_NUM 184
 //VersionInfoEnd
 
 #define IDENT_VERSION "G" //Change this if you're not Simon! It should be a single letter
@@ -233,8 +233,8 @@ int ISWIRE;
 int GSPEED;
 int love[XRES/9][YRES/9];
 int lolz[XRES/9][YRES/9];
-unsigned char gol[XRES][YRES];
-unsigned char gol2[XRES][YRES][NGOL+1];
+unsigned char gol[YRES][XRES];
+unsigned char gol2[YRES][XRES][NGOL+1];
 int SEC;
 int SEC2;
 int console_mode;
