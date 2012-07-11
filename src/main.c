@@ -200,6 +200,7 @@ typedef struct
 static const char *old_ver_msg_beta = "A new beta is available - click here!";
 static const char *old_ver_msg = "A new version is available - click here!";
 char new_message_msg[255];
+char new_subs_msg[255];
 float mheat = 0.0f;
 
 int saveURIOpen = 0;
@@ -762,7 +763,7 @@ int main(int argc, char *argv[])
 	void *http_ver_check, *http_session_check = NULL;
 	char *ver_data=NULL, *check_data=NULL, *tmp;
 	//char console_error[255] = "";
-	int result, i, j, bq, bc = 0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, buildnum, is_beta = 0, old_ver_len, new_message_len=0;
+	int result, i, j, bq, bc = 0, do_check=0, do_s_check=0, old_version=0, http_ret=0,http_s_ret=0, major, minor, buildnum, is_beta = 0, old_ver_len, new_message_len=0, new_subs_len=0, new_subs=0;
 #ifdef INTERNAL
 	int vs = 0;
 #endif
@@ -976,6 +977,68 @@ int main(int argc, char *argv[])
 		http_session_check = http_async_req_start(NULL, "http://" SERVER "/Login.api?Action=CheckSession", NULL, 0, 0);
 		http_auth_headers(http_session_check, svf_user_id, NULL, svf_session_id);
 	}
+
+	//Check for new saves
+	FILE *fp;
+	char **names;
+	int *ids;
+	int num = 0;
+
+	fp = fopen("subs", "r+");
+	if (fp)
+	{
+		int save, snum;
+
+		fscanf(fp, "%i", &num);
+
+		if (num>0)
+		{
+			names = malloc(num*sizeof(names[0]));
+
+			for(i = 0; i<num; i++)
+				names[i] = malloc(10*sizeof(char));
+			ids = malloc(num*sizeof(int));
+
+			for(i = 0; i<num; i++)
+				fscanf(fp, "%i %20s", &ids[i], names[i]);
+
+			int *lids;
+			lids = malloc(num*sizeof(int));
+			char *resp;
+			char *quer;
+			quer = malloc(150*sizeof(char));
+			int rlen, errcode, ppos = 0, bid = 0;
+			new_subs = 0;
+
+			for(i = 0; i<num; i++)
+			{
+				lids[i] = ids[i];
+				sprintf(quer, "http://" SERVER "/Search.api?Start=0&Count=10&Query=sort:date user:%s", names[i]);
+				resp = http_simple_get(quer, &errcode, &rlen);
+				if (errcode==200)
+				{
+					while ((sscanf(resp+ppos, "%i", &bid) == 1) && bid!=lids[i])
+					{
+						new_subs++;
+						if (!ppos)
+							ids[i] = bid;
+
+						while(ppos<rlen && resp[ppos] != '\n') ppos++;
+						ppos++;
+					}
+				}
+				free(resp);
+			}
+		}
+	}
+	else
+	{
+		fprintf(stderr, "An error while opening file occured.\n");
+		fp = fopen("subs", "w");
+		fprintf(fp, 0);
+	}
+	fclose(fp);
+
 #ifdef LUACONSOLE
 	luacon_eval("dofile(\"autorun.lua\")"); //Autorun lua script
 #endif
@@ -1117,6 +1180,7 @@ int main(int argc, char *argv[])
 			}
 			do_check = (do_check+1) & 15;
 		}
+
 		if (saveDataOpen)
 		{
 			//Clear all settings and simulation data
@@ -1941,6 +2005,20 @@ int main(int argc, char *argv[])
 		{
 			open_link("http://" SERVER "/Conversations.html");
 		}
+		if (b && !bq && x>=(XRES-19-new_subs_len) &&
+		        x<=(XRES-14) && y>=(YRES-52) && y<=(YRES-39) && new_subs)
+		{
+			//Rewrite subs file
+			FILE *file;
+			file = fopen("subs", "w");
+
+			fprintf(file, "%i\n", num);
+			for(i = 0; i<num; i++)
+				fprintf(file, "%i %s\n", ids[i], names[i]);
+
+			fclose(file);
+			new_subs = 0;
+		}
 		if (update_flag)
 		{
 			info_box(vid_buf, "Finalizing update...");
@@ -2667,6 +2745,20 @@ int main(int argc, char *argv[])
 			clearrect(vid_buf, XRES-21-new_message_len, YRES-39, new_message_len+9, 17);
 			drawtext(vid_buf, XRES-16-new_message_len, YRES-34, new_message_msg, 255, 186, 32, 255);
 			drawrect(vid_buf, XRES-19-new_message_len, YRES-37, new_message_len+5, 13, 255, 186, 32, 255);
+		}
+
+		if (new_subs)
+		{
+			if (new_subs>9)
+				sprintf(new_subs_msg, "You have many new saves, Click to view");
+			else
+				sprintf(new_subs_msg, "You have %d new save%s, Click to view", new_subs, (new_subs>1)?"s":"");
+
+			new_subs_len = textwidth(new_subs_msg);
+			
+			clearrect(vid_buf, XRES-21-new_subs_len, YRES-54, new_subs_len+9, 17);
+			drawtext(vid_buf, XRES-16-new_subs_len, YRES-49, new_subs_msg, 255, 186, 32, 255);
+			drawrect(vid_buf, XRES-19-new_subs_len, YRES-52, new_subs_len+5, 13, 255, 186, 32, 255);
 		}
 
 		FPS++;
